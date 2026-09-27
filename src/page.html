@@ -1,0 +1,25 @@
+<title>Zrak na raskrižju · Zagreb-1</title>
+<style>
+{{STYLE}}
+</style>
+
+<div id="app">
+  <canvas id="gl"></canvas>
+  <p id="loading">placeholder page — owner [ui] replaces src/page.html</p>
+</div>
+
+<script type="application/json" id="site-data">{{SITE}}</script>
+<script type="application/json" id="env-data">{{ENV}}</script>
+<script type="application/json" id="meas-data">{{MEAS}}</script>
+<script type="application/json" id="cal-data">{{CAL}}</script>
+<script type="application/json" id="lut-data">{{LUT}}</script>
+<script type="text/plain" id="lod2-data">{{LOD2}}</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+{{APP}}
+</script>

@@ -1,0 +1,3 @@
+# Optional, for development only. The data pipeline and the page need nothing beyond Python 3 stdlib.
+playwright>=1.49     # browser tests (tests/browser) and LUT export (tools/export_lut.py); then: python -m playwright install chromium
+numpy>=1.26          # optional speed-up in tools/calibrate.py

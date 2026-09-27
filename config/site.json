@@ -1,0 +1,116 @@
+{
+  "_comment": "Single source of truth for site constants. Read by every tools/*.py script and embedded into the page as SITE (see tools/build.py). Change values here, never hard-code them elsewhere.",
+  "name": "Zrak na raskrižju",
+  "name_en": "Air at the crossroads",
+  "repo": "zagreb-1-zrak",
+  "station": {
+    "iszz_id": 155,
+    "name": "ZAGREB-1",
+    "national_code": "RH0101",
+    "eoi_code": "HR0007A",
+    "type": "urban traffic",
+    "operator": "DHMZ",
+    "lat": 45.800496,
+    "lon": 15.97422,
+    "address": "NW corner of Ulica grada Vukovara x Miramarska cesta, east end of Park Drage Galića",
+    "inlet_height_m": 4.0,
+    "mast_heights_m": [4.0, 10.0],
+    "kerb_distance_m": [9, 12],
+    "ground_m_asl": 115.6,
+    "osm_way": 1409603653,
+    "since": "2003-02-11"
+  },
+  "background": {
+    "iszz_id": 303,
+    "name": "ZAGREB-4",
+    "eoi_code": "HR0041A",
+    "type": "suburban background",
+    "note": "Default background for NOx, NO2, O3, PM10, PM2.5 (docs/research/critic.md §1.2). Mirogojska (280) is NOT used by default."
+  },
+  "frame": {
+    "_comment": "Local metric frame used by EVERY layer: x = (lon - lon0) * kx (east), z = -(lat - lat0) * ky (south), y = up, metres above local ground. True north is -z.",
+    "lat0": 45.800496,
+    "lon0": 15.97422,
+    "kx": 77607.7,
+    "ky": 110540.0,
+    "htrs96_e0": 459129.318,
+    "htrs96_n0": 5073538.234
+  },
+  "extent": {
+    "scene_half_m": 750,
+    "lod2_radius_m": 500,
+    "tunnel": { "along_m": 600, "across_m": 600, "height_m": 160, "up_m": 300, "dx_fine": 5, "dx_coarse": 10 }
+  },
+  "iszz": {
+    "base": "https://iszz.azo.hr/iskzl/rs",
+    "export": "https://iszz.azo.hr/iskzl/rs/podatak/export/json",
+    "eaqi": "https://iszz.azo.hr/iskzl/rs/eaqi/indeks?h=0",
+    "max_rows": 1000,
+    "chunk_days": 40,
+    "pace_s": 1.1,
+    "missing_sentinel_max": -900,
+    "time_semantics": "epoch ms UTC marking the END of the averaging hour",
+    "params": {
+      "no2":  { "code": 1,   "unit": "µg/m³", "z1": true, "z4": true },
+      "nox":  { "code": 38,  "unit": "µg/m³", "z1": true, "z4": true },
+      "o3":   { "code": 31,  "unit": "µg/m³", "z1": false, "z4": true },
+      "pm10": { "code": 5,   "unit": "µg/m³", "z1": true, "z4": true },
+      "pm25": { "code": 28,  "unit": "µg/m³", "z1": true, "z4": true },
+      "so2":  { "code": 2,   "unit": "µg/m³", "z1": true, "z4": false },
+      "co":   { "code": 3,   "unit": "mg/m³", "z1": true, "z4": false },
+      "c6h6": { "code": 32,  "unit": "µg/m³", "z1": true, "z4": false },
+      "ws":   { "code": 477, "unit": "m/s",   "z1": true, "z4": false },
+      "wd":   { "code": 478, "unit": "°",     "z1": true, "z4": false },
+      "t":    { "code": 475, "unit": "°C",    "z1": true, "z4": false },
+      "rh":   { "code": 479, "unit": "%",     "z1": true, "z4": false }
+    },
+    "types": { "hourly_raw": 0, "hourly_validated": 1, "daily_raw": 4, "daily_validated": 5 }
+  },
+  "openmeteo": {
+    "model": "ecmwf_ifs",
+    "hourly": ["wind_speed_10m", "wind_direction_10m", "boundary_layer_height", "temperature_2m", "cloud_cover", "shortwave_radiation"],
+    "archive": "https://archive-api.open-meteo.com/v1/archive",
+    "forecast": "https://api.open-meteo.com/v1/forecast",
+    "air_quality": "https://air-quality-api.open-meteo.com/v1/air-quality",
+    "air_quality_hourly": ["nitrogen_dioxide", "ozone", "pm10", "pm2_5"],
+    "air_quality_domain": "cams_europe",
+    "note": "Instantaneous values: average t-1 and t (vector-average the wind) to match ISZZ hour-ending means."
+  },
+  "zg3d": {
+    "feature_server": "https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/ZG3D_2022_3d_model_GZ/FeatureServer/0/query",
+    "attribution": "© Grad Zagreb – ZG3D 2022 (3D model grada, LiDAR-ažuriran), Otvorena dozvola"
+  },
+  "dtm": {
+    "url": "https://geoportal.dgu.hr/services/atom/RH_ELEV_107.tif",
+    "crs": "EPSG:3045",
+    "attribution": "© DGU – INSPIRE digitalni model reljefa 20 m, Otvorena dozvola"
+  },
+  "overpass": ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"],
+  "model_defaults": {
+    "dirs": 16,
+    "stability_groups": ["AC", "D", "EF"],
+    "source_groups": ["A", "B", "C", "D"],
+    "source_group_meaning": { "A": "Ulica grada Vukovara (Vukovarska)", "B": "Miramarska cesta", "C": "all other motor roads", "D": "domestic heating (area source over low-rise residential)" },
+    "U0": 1.4,
+    "beta_prior": 1.0,
+    "f_no2": 0.10,
+    "Sct": 0.7,
+    "lambda_m": 30,
+    "kmin_m": 0.02,
+    "kappa": 0.4,
+    "z0_m": 1.5,
+    "d_m": 7.0,
+    "Hbar_m": 14.0,
+    "z0r_m": 0.3,
+    "zb_m": 80,
+    "h_min_m": 100,
+    "aadt_unit": 10000
+  },
+  "attribution": {
+    "iszz": "Izvor podataka: MZOZT – Kvaliteta zraka u Republici Hrvatskoj (iszz.azo.hr); mjerenja DHMZ",
+    "osm": "© OpenStreetMap contributors (ODbL)",
+    "openmeteo": "Weather data: Open-Meteo.com (CC BY 4.0), ECMWF IFS",
+    "cams": "Background forecast: Copernicus Atmosphere Monitoring Service (CAMS) via Open-Meteo",
+    "reference": "GPU wind tunnel adapted from maksimir-pod-kisom © 2026 Ivan Rezić (MIT)"
+  }
+}
