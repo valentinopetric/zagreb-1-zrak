@@ -294,6 +294,19 @@ test('flow.sources: road length × aadt is conserved for a rotated road; heating
   return { roadLength_m: +len.toFixed(2) };
 });
 
+// Regression (review 2026-09-28): env.json lists the station tree in trees[] (k 'station') AND in station.tree;
+// the ENV-based geometry fallback voxelised it twice (double porous fraction over the inlet).
+test('flow.voxel: vox_envGeometry keeps the station tree once', () => {
+  const st = { x: -5, z: -10, h: 14, r: 9 };
+  const near = (g) => g.trees.filter((tr) => Math.hypot(tr.x - st.x, tr.z - st.z) < 1.5).length;
+  const listed = vox_envGeometry({ trees: [{ ...st, k: 'station' }, { x: 40, z: 40, h: 10, r: 3 }], station: { tree: st } });
+  const notListed = vox_envGeometry({ trees: [{ x: 40, z: 40, h: 10, r: 3 }], station: { tree: st } });
+  assert(near(listed) === 1, `station tree ${near(listed)}× when env.trees already has it`);
+  assert(near(notListed) === 1 && notListed.trees.length === 2, 'station tree added when env.trees lacks it');
+  assert(near(vox_envGeometry(ENV)) <= 1, 'real ENV: at most one station crown');
+  return { real: near(vox_envGeometry(ENV)) };
+});
+
 // ------------------------------------------------------------------ inflow profile
 test('flow.inflow: blending-height log/canopy profile (physics §6.2–6.3), monotone, matched, same table in GLSL', () => {
   const p = INFLOW;
@@ -495,6 +508,7 @@ test('flow.aero.lut: a 16-direction × 3-group sweep on a tiny tunnel gives the 
     if (scalar) {
       assert(lut.meta.complete && lut.gamma.every((r) => r.every((g) => g && g.length === 4 && g.every(Number.isFinite))), 'Γ complete');
       assert(lut.band.every((r) => r.every((b) => b && b.length === 4 && b.every((mm) => mm.length === 2))), 'band shape');
+      assert(lut.quality.length === 16 && lut.quality.every((r) => r.length === 3 && r.every((q) => q && typeof q.converged === 'boolean' && Number.isFinite(q.sweeps))), 'per-entry solve quality');
     } else assert(!lut.meta.complete && lut.meta.status.startsWith('wind-only'), 'wind-only without the scalar solver');
     // Flows ran once per direction (16 jobs with an LBM stage), the other groups reused them.
     const lbmJobs = aero.timing.filter((x) => x.fine_s > 0).length;

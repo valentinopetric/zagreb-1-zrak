@@ -119,36 +119,29 @@ The data are **free but on request**:
 
 Every layer goes through `tools/common.py:xz()` (architecture §2, critic §4.2):
 
-    x = (lon − 15.97422) · 77 607.7        (east, m)
-    z = −(lat − 45.800496) · 110 540       (south, m)
+    x = (lon − 15.97422) · 77 741.2        (east, m)
+    z = −(lat − 45.800496) · 111 147.4     (south, m)
 
-The origin is the DHMZ station point. True north is −z, so meteorological bearings need no
-convergence correction. Heights are metres above local ground (y). The model treats the ground as flat.
+The two constants are the WGS84/GRS80 metres per degree at the origin latitude φ0 = 45.800496°:
+`kx = N(φ0)·cos φ0·π/180` and `ky = M(φ0)·π/180`, where N and M are the prime-vertical and meridional radii of
+curvature. The frame is therefore isometric (true metres in both directions) to about 0.01 % within the ±750 m scene.
+
+The origin is the DHMZ station point. True north is −z, so meteorological bearings need no convergence
+correction. Heights are metres above local ground (y). The model treats the ground as flat.
 
 - **ZG3D is requested in lon/lat** (`outSR=4326`, `inSR=4326`) and pushed through the same `xz()`.
-  This is critic §4.2's rule, which avoids the 5–6 m disagreement between EPSG:3765 offsets and the
-  equirectangular frame (critic §1.11). OSM is lon/lat anyway.
-- The DTM lives in EPSG:3045. It is sampled by converting local (x, z) → lat/lon → EPSG:3045
-  (§2.5).
+  This follows critic §4.2's rule never to mix EPSG:3765 offsets with the local frame. OSM is lon/lat anyway.
+- The DTM lives in EPSG:3045. It is sampled by converting local (x, z) → lat/lon → EPSG:3045 (§2.5).
 
-**The frame is consistent across layers.** An independent check (§2.9.4) finds the best
-match between OSM and ZG3D footprints at a shift of (0.0, −0.25) m, i.e. within one 0.25 m raster
-cell of zero.
+**The frame is consistent across layers.** An independent check (§2.9.4) finds the best match between OSM and
+ZG3D footprints at a shift of (0.0, −0.25) m, i.e. within one 0.25 m raster cell of zero.
 
-**The frame is not isometric (for the lead to decide).** The constants make a slightly compressed map.
-Measured against the exact Transverse Mercator (point scale 0.99992 at the station):
-
-| Direction | local metres per true metre | at 750 m |
-|---|---|---|
-| East–west (KX = 77 607.7 vs 77 741.2 m/° at 45.8° on GRS80) | 0.99828 | 1.3 m short |
-| North–south (KY = 110 540 vs 111 147.4 m/°) | 0.99453 | 4.1 m short |
-
-This fully explains critic §1.11's table: (+750, 0) → (+1.2, +4.9) m, (0, −750) → (+5.0, −4.1) m. The
-remainder is the 0.37° grid convergence. Because every layer shares the frame, relative geometry is
-consistent and nothing in the model depends on it at the 0.5 % level. For example, the 12 m kerb
-distance becomes 11.98 m. Heights (y) are true metres, so buildings are 0.2–0.5 % "taller" relative to
-their footprints. Setting KX = 77 741.2 and KY = 111 147.4 in `config/site.json` would make the frame
-isometric. That is a frame change for all owners, so it is listed as an interface note, not made here.
+**History of the constants.** The first build used the reference repo's `kx = 111320·cos φ0 = 77 607.7` and
+`ky = 110 540`. Those constants are the equatorial-sphere values, and they compress the map by 0.17 % east–west and
+0.55 % north–south (1.3 m and 4.1 m at 750 m). That compression fully explains the 5–6 m disagreement with
+EPSG:3765 offsets that critic §1.11 found. On 2026-09-28, during integration, the lead replaced them with the exact
+ellipsoidal values above and rebuilt env.json from the cached downloads. Relative to Transverse Mercator
+(point scale 0.99992 at the station), the remaining differences are the 0.37° grid convergence and a 0.008 % scale.
 
 ---
 

@@ -28,11 +28,11 @@
     "note": "Default background for NOx, NO2, O3, PM10, PM2.5 (docs/research/critic.md §1.2). Mirogojska (280) is NOT used by default."
   },
   "frame": {
-    "_comment": "Local metric frame used by EVERY layer: x = (lon - lon0) * kx (east), z = -(lat - lat0) * ky (south), y = up, metres above local ground. True north is -z.",
+    "_comment": "Local metric frame used by EVERY layer: x = (lon - lon0) * kx (east), z = -(lat - lat0) * ky (south), y = up, metres above local ground. True north is -z. kx, ky = WGS84/GRS80 metres per degree of longitude/latitude at lat0 (N·cosφ·π/180, M·π/180), so the frame is isometric to 0.01 % within ±750 m (docs/02-geometry.md §2.3).",
     "lat0": 45.800496,
     "lon0": 15.97422,
-    "kx": 77607.7,
-    "ky": 110540.0,
+    "kx": 77741.2,
+    "ky": 111147.4,
     "htrs96_e0": 459129.318,
     "htrs96_n0": 5073538.234
   },

@@ -680,5 +680,25 @@ class TestIncremental(unittest.TestCase):
         self.assertEqual(sep, ["p1_t0_20260901_20260929.json"])
 
 
+class TestPlausibility(unittest.TestCase):
+    """build_measurements.plausible(): station meteo outside physical limits is dropped and counted (data review 2026-09-28)."""
+
+    def test_wind_spikes_dropped_and_counted(self):
+        import build_measurements as bmx
+        bmx.DROPPED.clear()
+        s = {0: 1.2, 3600000: 127.6, 7200000: 57.0, 10800000: 0.0}
+        out = bmx.plausible("z1.ws", s)
+        self.assertEqual(sorted(out), [0, 10800000])
+        self.assertEqual(bmx.DROPPED, {"z1.ws": 2})
+
+    def test_pollutants_and_ifs_untouched(self):
+        import build_measurements as bmx
+        bmx.DROPPED.clear()
+        s = {0: -1.5, 3600000: 900.0}
+        self.assertEqual(bmx.plausible("z1.nox", s), s)
+        self.assertEqual(bmx.plausible("ifs.u10", {0: 70.0}), {0: 70.0})
+        self.assertEqual(bmx.DROPPED, {})
+
+
 if __name__ == "__main__":
     unittest.main()

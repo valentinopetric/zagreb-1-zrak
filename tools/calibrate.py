@@ -300,6 +300,7 @@ def _half(h: dict) -> int:
 def crossval(hours: list[dict]) -> dict:
     """Two half-year folds and leave-one-month-out for the physics model and the baseline."""
     pred = [math.nan] * len(hours)
+    pred_u0 = [math.nan] * len(hours)   # U0 of the fold that predicted each test hour (for τ in totals())
     base = [math.nan] * len(hours)
     folds = []
     for test_half in (1, 0):
@@ -312,6 +313,7 @@ def crossval(hours: list[dict]) -> dict:
         te = [hours[i] for i in te_idx]
         for i, v in zip(te_idx, predict(te, p["beta"], p["U0"])):
             pred[i] = v
+            pred_u0[i] = p["U0"]
         for i, v in zip(te_idx, baseline_predict(b, te)):
             base[i] = v
         folds.append({"train": "Jan–Jun" if test_half == 1 else "Jul–Dec", "test": "Jul–Dec" if test_half == 1 else "Jan–Jun",
@@ -331,7 +333,7 @@ def crossval(hours: list[dict]) -> dict:
         for i, v in zip(te_idx, baseline_predict(b, te)):
             lomo_b[i] = v
         lomo_params[f"{mkey // 100}-{mkey % 100:02d}"] = {"beta": round(p["beta"], 3), "U0": p["U0"]}
-    return {"pred": pred, "base": base, "lomo": lomo, "lomo_base": lomo_b, "folds": folds, "lomo_params": lomo_params}
+    return {"pred": pred, "pred_U0": pred_u0, "base": base, "lomo": lomo, "lomo_base": lomo_b, "folds": folds, "lomo_params": lomo_params}
 
 
 # ------------------------------------------------------------------ diagnostics
@@ -366,14 +368,19 @@ def diagnostics(hours: list[dict], pred: list[float]) -> dict:
     }
 
 
-def totals(hours: list[dict], pred: list[float], U0: float) -> dict:
-    """End-to-end NO2 and NOx at ZAGREB-1 with the ZAGREB-4 background (test predictions)."""
+def totals(hours: list[dict], pred: list[float], U0: float | Sequence[float]) -> dict:
+    """End-to-end NO2 and NOx at ZAGREB-1 with the ZAGREB-4 background (test predictions).
+
+    U0 is one value or, for held-out predictions, one per hour: the U0 of the fold that predicted it, so that the plume
+    age τ of a test hour never uses a U0 fitted on that hour (review 2026-09-28: it used the whole-period U0).
+    """
     o_no2, m_no2, o_nox, m_nox = [], [], [], []
-    for h, inc in zip(hours, pred):
+    u0s = list(U0) if isinstance(U0, (list, tuple)) else [U0] * len(hours)
+    for h, inc, u0 in zip(hours, pred, u0s):
         z = h["o"]
         if not (math.isfinite(inc) and all(math.isfinite(z.get(k, math.nan)) for k in ("z1.no2", "z4.no2", "z4.nox", "z4.o3"))):
             continue
-        tau = _tau(h, U0)
+        tau = _tau(h, u0)
         r = M.no2_chemistry(inc, z["z4.no2"], z["z4.nox"], z["z4.o3"], tau, M.j_no2(h["sw"]), M.k_no_o3(h["t2"]), F_NO2)
         o_no2.append(z["z1.no2"])
         m_no2.append(r["no2"])
@@ -443,7 +450,7 @@ def calibrate_model(name: str, hours: list[dict], rows_for: Callable[[str], list
         "baseline_lomo": _round(M.metrics(obs, cv["lomo_base"])),
         "raw_physics_test": _round(M.metrics(obs, predict(hours, 1.0, M.MD["U0"]))),
         "folds": cv["folds"], "lomo_params": cv["lomo_params"],
-        "totals_test": totals(hours, cv["pred"], full["U0"]),
+        "totals_test": totals(hours, cv["pred"], cv["pred_U0"]),
         "mean_obs": round(statistics.fmean(obs), 2),
         "mean_mod_raw": round(statistics.fmean(predict(hours, 1.0, M.MD["U0"])), 2),
         **diagnostics(hours, cv["pred"]),

@@ -20,9 +20,13 @@
  *   lut/field → the top level when model === 'lbm' and status === 'calibrated';
  *   anything else → the priors β = SITE beta_prior (1.0), U0 = SITE U0 (1.4 m/s), status 'uncalibrated'.
  * calibrated = false gives the "raw physics" priors with status 'raw' (the UI toggle, critic §4.8).
+ * The 3D fit belongs to one LUT grid (calibration.json lbm.lut_meta.grid; Γ changes up to 3× between the 10 m and
+ * 5 m grids, docs/03 §8.2): when the LUT in use (`lut`, default the embedded LUT) is on another grid, the fit is not
+ * applied and the priors are returned as 'uncalibrated' (review 2026-09-28: a re-exported LUT used to inherit the old
+ * grid's β silently until tools/calibrate.py was re-run).
  * Returns {beta, U0, fNO2, status, model}.
  */
-function mod_calFor(source, cal = CAL, calibrated = true) {
+function mod_calFor(source, cal = CAL, calibrated = true, lut = typeof LUT !== 'undefined' ? LUT : null) {
   const c = cal || {};
   const fin = Number.isFinite;
   const fNO2 = fin(c.f_no2) ? c.f_no2 : MD.f_no2;
@@ -35,6 +39,8 @@ function mod_calFor(source, cal = CAL, calibrated = true) {
     return { beta: g.beta, U0: fin(g.U0) ? g.U0 : fin(c.U0) ? c.U0 : MD.U0, fNO2, status: 'calibrated', model };
   }
   if (c.model === 'lbm' && c.status === 'calibrated' && fin(c.beta)) {
+    const calGrid = c.lbm && c.lbm.lut_meta && c.lbm.lut_meta.grid, lutGrid = lut && lut.meta && lut.meta.grid;
+    if (calGrid && lutGrid && calGrid !== lutGrid) return prior;
     return { beta: c.beta, U0: fin(c.U0) ? c.U0 : MD.U0, fNO2, status: 'calibrated', model };
   }
   return prior;

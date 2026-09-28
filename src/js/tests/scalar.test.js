@@ -433,6 +433,21 @@ test('scalar: ScalarField sample / receptor band / slice and convergence stats',
   assert(r.inside, 'receptor inside the tunnel');
   for (let g = 0; g < 4; g++) assert(r.band[g][0] <= r.gamma[g] + 1e-12 && r.gamma[g] <= r.band[g][1] + 1e-12, 'band contains the value');
   assert(r.gamma[0] > 0 && r.band[0][1] > r.band[0][0], 'non-trivial band');
+  // The band is centred: brute force over every fluid cell whose centre is within 1.5 cells of the receptor, in the
+  // two layers around its height (physics review 2026-09-28; the inlet sits on a cell face, so this is a 4×4×2 block).
+  {
+    const [gx, gy, gz] = sc_worldToGrid(f.frame, T, RECEPTOR), k0 = Math.floor(clamp(gz, 0, T.nz - 1.001));
+    let lo = Infinity, hi = -Infinity, cells = 0;
+    for (let k = k0; k <= Math.min(T.nz - 1, k0 + 1); k++) for (let j = 0; j < T.ny; j++) for (let i = 0; i < T.nx; i++) {
+      if (Math.abs(i - gx) > 1.5 + 1e-6 || Math.abs(j - gy) > 1.5 + 1e-6) continue;
+      const q = (k * T.ny + j) * T.nx + i;
+      if (!f.fluid[q]) continue;
+      cells++; lo = Math.min(lo, f.gamma[q * 4]); hi = Math.max(hi, f.gamma[q * 4]);
+    }
+    assert(cells >= 18, `band cells ${cells}`);
+    assertClose(r.band[0][0], Math.min(lo, r.gamma[0]), 1e-9, 'band min = brute-force min over the centred block');
+    assertClose(r.band[0][1], Math.max(hi, r.gamma[0]), 1e-9, 'band max = brute-force max over the centred block');
+  }
   // sample() at a cell centre equals slice() of that cell's column at the cell's height.
   const out = new Float32Array(8), i = 50, j = 12, k = 1, fr = f.frame;
   const p = fr.origin.clone().addScaledVector(fr.ex, (i + 0.5) * T.dx).addScaledVector(fr.ey, (j + 0.5) * T.dx);

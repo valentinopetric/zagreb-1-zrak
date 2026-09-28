@@ -96,6 +96,17 @@ def validate_lut(lut: dict) -> tuple[list[str], list[str]]:
                 errors.append(f"wind[{d}] needs s4, s10, dir4, dir10")
     if missing:
         warnings.append(f"{missing} of {DIRS * nc} gamma entries are null (meta.status: {lut['meta'].get('status')})")
+    # Optional per-entry solve quality (aero.js, from 2026-09-28): warn about entries that did not converge or whose
+    # mass balance is outside the solver's tolerance, since they enter the calibration like any other entry.
+    quality = lut.get("quality")
+    if isinstance(quality, list) and len(quality) == DIRS:
+        bad = [f"{lut['dirs'][d]:g}°/{classes[c]}" for d, row in enumerate(quality) if isinstance(row, list)
+               for c, q in enumerate(row) if isinstance(q, dict) and (q.get("converged") is False or q.get("mass_ok") is False)]
+        if bad:
+            warnings.append(f"{len(bad)} entries did not converge or miss the mass tolerance: {', '.join(bad[:12])}"
+                            + (" …" if len(bad) > 12 else ""))
+    else:
+        warnings.append("no per-entry solve quality in this LUT (exported before 2026-09-28)")
     return errors, warnings
 
 

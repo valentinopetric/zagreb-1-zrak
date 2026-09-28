@@ -974,8 +974,12 @@ class ScalarField {
 
   /*
    * Γ and A at the receptor (default: the ZAGREB-1 inlet, RECEPTOR = (0, 4 m, 0)), plus the band [min, max] of Γ
-   * over the 3×3×2 cells around it (fluid cells only): the grid-resolution uncertainty shown in the UI (physics §5.9,
+   * over the cells around it (fluid cells only): the grid-resolution uncertainty shown in the UI (physics §5.9,
    * critic §1.6; the ±1-cell band also covers the 4.5 m offset between the DHMZ and ISZZ coordinates).
+   * Horizontally the band takes every cell whose centre lies within 1.5 cells of the receptor, so it stays centred:
+   * 3×3 cells when the receptor is at a cell centre, 4×4 when it sits on a cell face, as the ZAGREB-1 inlet does on
+   * the 5 m and 10 m tunnels (physics review 2026-09-28: Math.round had shifted a 3×3 band half a cell downstream).
+   * Vertically it takes the two layers around the receptor height.
    */
   receptor(p = RECEPTOR) {
     const out = new Float32Array(8), inside = this.sample(p, out);
@@ -983,10 +987,11 @@ class ScalarField {
     const band = gamma.map((v) => [v, v]);
     if (inside) {
       const { nx, ny, nz } = this, [gx, gy, gz] = sc_worldToGrid(this.frame, this.T, p);
-      const ic = Math.round(gx), jc = Math.round(gy), k0 = Math.floor(clamp(gz, 0, nz - 1.001));
+      const eps = 1e-6, k0 = Math.floor(clamp(gz, 0, nz - 1.001));
+      const i0 = Math.ceil(gx - 1.5 - eps), i1 = Math.floor(gx + 1.5 + eps), j0 = Math.ceil(gy - 1.5 - eps), j1 = Math.floor(gy + 1.5 + eps);
       const lo = [Infinity, Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity, -Infinity];
-      for (let dk = 0; dk < 2; dk++) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-        const i = ic + di, j = jc + dj, k = Math.min(nz - 1, k0 + dk);
+      for (let dk = 0; dk < 2; dk++) for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const k = Math.min(nz - 1, k0 + dk);
         if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
         const q = (k * ny + j) * nx + i;
         if (!this.fluid[q]) continue;

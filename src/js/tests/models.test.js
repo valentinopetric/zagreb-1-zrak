@@ -319,6 +319,20 @@ test('models: live fields on another grid than the LUT (delta method)', () => {
   assertClose(rm.gammaAt(45, 1.7, 'D', 'tower').gamma[0], 2, MT_F32, 'scenario field without a today twin');
 });
 
+// Regression (review 2026-09-28): the 3D β/U0 of calibration.json were applied to any LUT, also one exported on
+// another grid (Γ differs up to 3× between 10 m and 5 m) before tools/calibrate.py was re-run.
+test('models: a 3D calibration is applied only to a LUT on its own grid', () => {
+  const cal = { status: 'calibrated', model: 'lbm', beta: 3.087, U0: 1.8, f_no2: 0.1, lbm: { lut_meta: { grid: '60x60x16@10m' } } };
+  const same = mod_calFor('lut', cal, true, { meta: { grid: '60x60x16@10m' } });
+  const other = mod_calFor('lut', cal, true, { meta: { grid: '120x120x32@5m' } });
+  const unknown = mod_calFor('lut', { ...cal, lbm: null }, true, { meta: { grid: '120x120x32@5m' } });
+  assert(same.status === 'calibrated' && same.beta === 3.087 && same.U0 === 1.8, 'same grid: fitted β, U0');
+  assert(other.status === 'uncalibrated' && other.beta === MD.beta_prior && other.U0 === MD.U0, `other grid: priors (got β ${other.beta}, ${other.status})`);
+  assert(unknown.status === 'calibrated', 'no grid recorded: fitted values kept');
+  assert(mod_calFor('fallback', { ...cal, gauss: { beta: 2.96, U0: 1.3 } }, true, { meta: { grid: '120x120x32@5m' } }).beta === 2.96, 'the Gaussian fit does not depend on the LUT grid');
+  return { same: same.beta, other: other.beta };
+});
+
 test('models: increment, concentrations and cellValue agree', () => {
   const ga = { gamma: [0.05, 0.3, 0.1, 0.2], age: [2, 12, 8, 30], source: 'lut' };
   const tt = Date.UTC(2025, 0, 14, 8);

@@ -1,0 +1,53 @@
+# Unit tests (Python tools, fixtures only, no network) and the in-page test suite in headless Chromium.
+# WebGL2 runs on SwiftShader (software), so the GPU solver tests work on a plain runner, only slowly;
+# tests marked { slow: true } (full-grid GPU verification) are skipped here and run locally
+# (docs/10-runbook.md §Tests).
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python unit tests
+        run: python3 -m unittest discover -s tests/python -v
+      - name: Page builds
+        run: python3 tools/build.py --test
+      - name: Receptor LUT is valid
+        run: python3 tools/export_lut.py --check src/data/lut_receptor.json
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install playwright + Chromium
+        run: |
+          python3 -m pip install -r requirements-dev.txt
+          python3 -m playwright install --with-deps chromium
+      - name: In-page selftest (skip slow GPU tests)
+        run: python3 tests/browser/run_selftest.py --skip-slow --timeout 2400
+      - name: Smoke test (boot + one 10 m field, archive only)
+        run: python3 tests/browser/smoke.py --wait 900 --query "grid=coarse&live=0"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-test-output
+          path: |
+            dist/selftest.json
+            dist/smoke.png

@@ -344,6 +344,35 @@ class TestCalibrate(unittest.TestCase):
             CAL.write_if_changed(p, {"a": 2.0})
             self.assertEqual(json.loads(p.read_text())["a"], 2.0)
 
+    def test_totals_use_the_fold_u0_not_the_whole_period_fit(self):
+        """Regression (review 2026-09-28): the plume age τ of a held-out hour in totals() used the U0 fitted on all
+        hours, test hours included. It must use the U0 of the fold that predicted the hour."""
+        import random
+        rnd = random.Random(11)
+        hours = []
+        for i in range(120):
+            month = 202501 + (i % 12)
+            U0 = 0.8 if month % 100 <= 6 else 2.4          # the two halves want different U0
+            u, S = rnd.uniform(0.2, 5), rnd.uniform(1e-6, 4e-5)
+            hours.append({"S": S, "u": u, "obs": 1e6 * 3.0 * S / math.sqrt(u * u + U0 * U0), "month": month,
+                          "dtype": "weekday", "lhour": i % 24, "dir": (i * 37) % 360, "sw": 300.0, "t2": 15.0,
+                          "ga": {"gamma": [0.1, 0.2, 0.0, 0.0], "age": [20.0, 30.0, 0.0, 0.0]},
+                          "q": {"A": 1e-4, "B": 1e-4, "C": 0.0, "D": 0.0},
+                          "o": {"z1.no2": 40.0, "z1.nox": 90.0, "z4.no2": 20.0, "z4.nox": 30.0, "z4.o3": 50.0}})
+        cv = CAL.crossval(hours)
+        full = CAL.fit(hours)
+        u0_for = {f["test"]: f["U0"] for f in cv["folds"]}
+        for h, u0 in zip(hours, cv["pred_U0"]):
+            self.assertEqual(u0, u0_for["Jan–Jun" if h["month"] % 100 <= 6 else "Jul–Dec"])
+        self.assertNotAlmostEqual(u0_for["Jan–Jun"], full["U0"], delta=0.1)
+        mod = [M.no2_chemistry(inc, 20.0, 30.0, 50.0, CAL._tau(h, u0), M.j_no2(300.0), M.k_no_o3(15.0), CAL.F_NO2)["no2"]
+               for h, inc, u0 in zip(hours, cv["pred"], cv["pred_U0"])]
+        want = M.metrics([40.0] * len(hours), mod)
+        got = CAL.totals(hours, cv["pred"], cv["pred_U0"])["no2"]
+        self.assertAlmostEqual(got["meanMod"], round(want["meanMod"], 4), places=4)
+        leaky = CAL.totals(hours, cv["pred"], full["U0"])["no2"]
+        self.assertNotAlmostEqual(leaky["meanMod"], got["meanMod"], places=3)
+
     def test_baseline_on_a_pure_profile(self):
         hours = []
         for i in range(24 * 60):

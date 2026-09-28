@@ -295,7 +295,29 @@ def paired_increment(a: dict[int, float], b: dict[int, float]) -> dict[int, floa
     return {t: v - b[t] for t, v in a.items() if t in b}
 
 
-# ================================================================== build
+# ================================================================== plausibility
+# Physical limits for the station's meteorological sensors. Values outside them are instrument or transmission errors
+# (e.g. raw z1.ws of 127.6, 57.0 and 219.5 m/s in May–June 2024, found in the data review of 2026-09-28). They are
+# dropped before any statistic, and the counts are reported in meta.sources.plausibility. Pollutant concentrations
+# are NOT filtered: small negative raw values are normal analyser noise around zero, and high values are real episodes.
+# 40 m/s as an HOURLY MEAN is far above anything recorded in Zagreb (the strongest gusts on record are ~30 m/s).
+PLAUSIBLE = {"ws": (0.0, 40.0), "wd": (0.0, 360.0), "t": (-40.0, 50.0), "rh": (0.0, 100.5)}
+DROPPED: dict[str, int] = {}
+
+
+def plausible(key: str, s: dict[int, float]) -> dict[int, float]:
+    """Drop values outside PLAUSIBLE for station keys like 'z1.ws'; record how many were dropped in DROPPED."""
+    lim = PLAUSIBLE.get(key.split(".", 1)[1]) if key.startswith(("z1.", "z4.")) else None
+    if not lim:
+        return s
+    lo, hi = lim
+    out = {t: v for t, v in s.items() if lo <= v <= hi}
+    if len(out) != len(s):
+        DROPPED[key] = len(s) - len(out)
+        log.warning("%s: dropped %d implausible values outside [%g, %g]", key, len(s) - len(out), lo, hi)
+    return out
+
+
 def load_inputs(iszz_csv: Path, ifs_csv: Path) -> tuple[dict[str, dict[int, float]], dict[str, int | None]]:
     """-> ({key: {t_end ms: value}} for z1.*, z4.*, ifs.*, inc.*), {key: last validated t or None})."""
     table = read_processed(iszz_csv)
@@ -308,7 +330,7 @@ def load_inputs(iszz_csv: Path, ifs_csv: Path) -> tuple[dict[str, dict[int, floa
         if st not in prefix:
             continue
         key = f"{prefix[st]}.{p}"
-        data[key] = {t: v for t, v, _f in rows}
+        data[key] = plausible(key, {t: v for t, v, _f in rows})
         vt = [t for t, _v, f in rows if f == 1]
         validated_until[key] = max(vt) if vt else None
     if not ifs_csv.exists():
@@ -448,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
                        "api": SITE["openmeteo"]["archive"], "blh_coverage_pct": (ifs_meta.get("coverage_pct")
                                                                                    or {}).get("blh")}}
     data, vuntil = load_inputs(Path(a.iszz), Path(a.ifs))
+    sources["plausibility"] = {"limits": PLAUSIBLE, "dropped": dict(DROPPED)}
     ref_rows = read_reference(ISZZ_REF)
     if not ref_rows:
         log.warning("%s missing: no gravimetric (reference-method) PM10 exceedance counts", ISZZ_REF.name)

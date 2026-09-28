@@ -430,8 +430,11 @@ function vox_envGeometry(env = ENV, leaves = 'on') {
   const e = env || {};
   const prisms = (e.buildings || []).map((b) => ({ p: b.p, b: b.b || 0, h: b.h, s: 1 }));
   const trees = leaves === 'none' ? [] : (e.trees || []).map((tr) => ({ x: tr.x, z: tr.z, h: tr.h, r: tr.r, lad }));
+  // The station tree only if ENV.trees does not already hold it (env.json lists it there with k 'station';
+  // the same test as city.js ct_baseTrees, so the crown is not voxelised twice with double porosity).
   const st = e.station && e.station.tree;
-  if (st && leaves !== 'none') trees.push({ x: st.x, z: st.z, h: st.h, r: st.r, lad });
+  const listed = st && (e.trees || []).some((tr) => tr && (tr.k === 'station' || (Math.hypot(tr.x - st.x, tr.z - st.z) < 1.5 && tr.r >= st.r * 0.8)));
+  if (st && !listed && leaves !== 'none') trees.push({ x: st.x, z: st.z, h: st.h, r: st.r, lad });
   return { prisms, trees, roads: e.roads || [], heating: e.heating || [] };
 }
 

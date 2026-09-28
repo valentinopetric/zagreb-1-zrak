@@ -610,7 +610,12 @@ class Aero {
     const res = { key: job.key, wind, conc: conc || null, receptor: rec, mast: job.flow.mast, grid: this.T.id, hash: job.hash, turb: job.turb || null, timing };
     aero_lruSet(this.cache, this._rid(job), res, this.max);
     if (rec) {
-      const val = { ...rec, wind: job.flow.mast, t: Date.now() };
+      // q: the solve's quality, carried into the LUT so that an entry that stopped at maxSweeps or has a large mass
+      // error is visible to tools/export_lut.py and tools/calibrate.py (physics review 2026-09-28, finding 6).
+      const st = (conc && conc.stats) || {};
+      const q = { sweeps: st.sweeps ?? null, converged: st.converged ?? null, reason: st.reason ?? null,
+        mass_err: Number.isFinite(st.massErr) ? aero_round(st.massErr) : null, mass_ok: st.massWithinTol ?? null };
+      const val = { ...rec, q, wind: job.flow.mast, t: Date.now() };
       const sk = this._storeKey(job);
       this.receptors.set(sk, val);
       aero_idbPut(this.db, sk, val);
@@ -727,10 +732,10 @@ class Aero {
   exportLUT(scenario = 'today', classes = AERO_GROUPS) {
     const probe = this._job({ scenario, dir: 0, stab: 'D' }, 'sweep');
     this._resolve(probe);
-    const gamma = [], age = [], band = [], wind = [];
+    const gamma = [], age = [], band = [], wind = [], quality = [];
     let missing = 0;
     for (let d = 0; d < 16; d++) {
-      const g = [], a = [], b = [];
+      const g = [], a = [], b = [], qq = [];
       let w = null;
       for (const stab of classes) {
         const job = this._job({ scenario, dir: d, stab }, 'sweep');
@@ -740,10 +745,11 @@ class Aero {
         g.push(e && e.gamma ? e.gamma : null);
         a.push(e && e.age ? e.age : null);
         b.push(e && e.band ? e.band : null);
+        qq.push(e && e.q ? e.q : null);
         if (!w && e && e.wind) w = e.wind;
       }
       if (!w) { const fl = this._flowEntry({ fscen: probe.fscen, key: { dir: d }, hash: probe.hash }); if (fl && fl.mast) w = fl.mast; }
-      gamma.push(g); age.push(a); band.push(b); wind.push(w);
+      gamma.push(g); age.push(a); band.push(b); wind.push(w); quality.push(qq);
     }
     const scalar = typeof ScalarSolver === 'function';
     return {
@@ -761,6 +767,8 @@ class Aero {
       },
       dirs: AERO_DIRS.slice(), classes: classes.slice(), groups: (MD.source_groups || ['A', 'B', 'C', 'D']).slice(),
       gamma, age, band, wind,
+      // [dir][class] {sweeps, converged, reason, mass_err, mass_ok} of each solve (null for entries from older stores)
+      quality,
     };
   }
 

@@ -39,7 +39,7 @@ through an importmap (same as the reference).
 
 | Item | Convention |
 |---|---|
-| World frame | x = east, y = up, z = south, metres. Origin = DHMZ station point 45.800496 N, 15.97422 E. `x = (lon − 15.97422)·77607.7`, `z = −(lat − 45.800496)·110540` (`tools/common.py:xz`). **Every** layer, including ZG3D, goes through this `xz()`. |
+| World frame | x = east, y = up, z = south, metres. Origin = DHMZ station point 45.800496 N, 15.97422 E. `x = (lon − 15.97422)·77741.2`, `z = −(lat − 45.800496)·111147.4` (exact WGS84 metres per degree at the origin latitude) (`tools/common.py:xz`). **Every** layer, including ZG3D, goes through this `xz()`. |
 | Heights | metres above local ground; ground is flat (y = 0) in the model. Building part: `b` (base) … `h` (top). |
 | Directions | meteorological "from" bearing, degrees clockwise from north. North = −z. Wind *blowing toward* vector = (−sin θ, 0, +cos θ) in (x, y, z). |
 | Receptor | ZAGREB-1 inlet at (0, 4.0, 0) = `RECEPTOR` in core.js. |

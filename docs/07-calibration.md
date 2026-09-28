@@ -406,6 +406,15 @@ then model.js keeps 5 m live fields from replacing the 10 m LUT (architecture §
 - **IFS wind at 9 km** is not the street wind. Its direction error is part of what σθ and the diagnostics absorb.
 - **The fallback's structural gaps** (§10) mean its β compensates for different things than the LBM's will. The two
   are never mixed.
+- **The two models see different source areas.** The GPU tunnel covers 300 m upwind and ±300 m across; the fallback
+  sums roads within 800 m and all heating tiles. For westerly winds, for example, the fallback's Γ_D is 1.9 and the
+  LUT's is 0.0003, because the heating tiles lie 300–600 m west (physics review 2026-09-28). Their β values are
+  therefore not comparable per group. This is one more reason the page never applies the Gaussian β to 3D values.
+- **β belongs to one grid.** The 3D fit is valid only for the LUT grid it was made on (`lbm.lut_meta.grid`). Γ differs
+  by up to 3× between the 10 m and 5 m grids. model.js checks the grid and shows the priors, labelled "uncalibrated",
+  when the embedded LUT is on another grid (physics review, finding 1). Re-run `calibrate.py` after every LUT export.
+- **Per-entry solve quality.** LUTs exported after 2026-09-28 carry `quality[dir][class]` (converged, mass error), and
+  `tools/export_lut.py --check` warns about entries that did not converge or miss the mass tolerance.
 - **Development mode.** `--dev` (or missing processed tables) reads the research caches instead. The output then says
   `"dev_data": true` and the notes say so. The current file was made from the processed tables (`"dev_data": false`).
 

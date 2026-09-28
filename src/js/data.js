@@ -22,6 +22,7 @@ const data_STRINGS = {
     'data.err.http': 'HTTP {code}',
     'data.err.network': 'Mreža nedostupna',
     'data.err.ratelimit': 'Poslužitelj ograničava broj upita (429), pokušano {n} puta',
+    'data.err.refused': 'Poslužitelj je odbio upit (vjerojatno ograničenje broja upita) ili mreža nije dostupna; pokušano {n} puta',
     'data.err.parse': 'Neočekivan oblik odgovora',
     'data.err.truncated': 'Odgovor je odrezan na {n} redaka',
     'data.src.live': 'uživo',
@@ -33,6 +34,7 @@ const data_STRINGS = {
     'data.err.http': 'HTTP {code}',
     'data.err.network': 'Network unavailable',
     'data.err.ratelimit': 'Server rate limit (429), tried {n} times',
+    'data.err.refused': 'Request refused (probably the rate limit) or network unavailable; tried {n} times',
     'data.err.parse': 'Unexpected response shape',
     'data.err.truncated': 'Response truncated at {n} rows',
     'data.src.live': 'live',
@@ -98,11 +100,12 @@ const ZgTime = {
   ceilHour(ms) { return Math.ceil(ms / data_HOUR) * data_HOUR; },
   /** The hour-ending stamp of the hour now in progress (it ends at the next full hour). */
   currentHourEnding(now = Date.now()) { return Math.floor(now / data_HOUR) * data_HOUR + data_HOUR; },
-  /** 'dd.MM.yyyy' of the local date at instant ms (the ISZZ export date format, iszz-api §3.1). */
+  /** 'yyyy-MM-dd' of the local date at instant ms (the value format of <input type="date">). */
   isoLocalDate(ms) {
     const p = ZgTime.parts(ms);
     return `${p.y}-${String(p.mo).padStart(2, '0')}-${String(p.d).padStart(2, '0')}`;
   },
+  /** 'dd.MM.yyyy' of the local date at instant ms (the ISZZ export date format, iszz-api §3.1). */
   iszzDate(ms) {
     const p = ZgTime.parts(ms);
     return `${String(p.d).padStart(2, '0')}.${String(p.mo).padStart(2, '0')}.${p.y}`;
@@ -221,6 +224,10 @@ const Hist = (() => {
  *    way to stay polite. The ISZZ EAQI routes are not rate limited (iszz-api §2) and use an unpaced lane.
  *  - 429 → wait 1–2 s with jitter and retry, up to data_RETRY_429 times (iszz-api §7 recommends 1–2 s).
  *    Network errors and 5xx → exponential back-off 1, 2, 4 s, up to data_RETRY_NET times.
+ *  - ISZZ sends its 429 WITHOUT CORS headers (checked with curl and in Chromium, 2026-09-28): the browser then
+ *    rejects fetch() with a TypeError ("Failed to fetch", net::ERR_FAILED) and the status is never visible. On a
+ *    lane flagged `refusalLooksLikeNetwork` (ISZZ) a network error is therefore treated as a probable 429 (same
+ *    1–2 s jitter and budget), unless the browser reports itself offline.
  *  - Each attempt has an AbortController timeout (data_TIMEOUT_MS).
  *  - Responses are cached in memory by URL. Windows that end more than 3 days ago never change (iszz-api §10:
  *    a chunk is final 3 days after its end) and are kept for the session; recent windows expire after
@@ -247,7 +254,7 @@ class data_HttpError extends Error {
 
 const Live = (() => {
   const lanes = {
-    iszz: { pace: SITE.iszz.pace_s * 1000, next: 0, chain: Promise.resolve() },
+    iszz: { pace: SITE.iszz.pace_s * 1000, next: 0, chain: Promise.resolve(), refusalLooksLikeNetwork: true },
     free: { pace: 0, next: 0, chain: Promise.resolve() },
     om: { pace: 1100, next: 0, chain: Promise.resolve() },
   };
@@ -303,7 +310,15 @@ const Live = (() => {
         try {
           res = await enqueue(lane, () => attempt(url, timeout));
         } catch (e) {
-          if (e.code === 'parse' || nNet >= data_RETRY_NET) throw e;
+          if (e.code === 'parse') throw e;
+          // a CORS-less 429 looks like a network error (header comment): retry it like a 429
+          const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+          if (e.code === 'network' && lanes[lane] && lanes[lane].refusalLooksLikeNetwork && !offline) {
+            if (++n429 > data_RETRY_429) throw new data_HttpError(t('data.err.refused', { n: n429 }), 'network');
+            await sleep(1000 + Math.random() * 1000);
+            continue;
+          }
+          if (nNet >= data_RETRY_NET) throw e;
           await sleep(1000 * 2 ** nNet++);
           continue;
         }
@@ -361,12 +376,16 @@ const Live = (() => {
    * The export returns whole local days: vrijemeOd=D1&vrijemeDo=D2 gives the slots D1 01:00 … (D2+1) 00:00
    * (iszz-api §4.3), so D1 is the local date of fromMs − 1 h and D2 that of toMs − 1 h. Ranges longer than
    * SITE.iszz.chunk_days are split, because the service silently truncates at max_rows rows (iszz-api §3.2).
+   * Neighbouring chunks usually request the same local day (a chunk edge falls inside a day), so each chunk keeps
+   * only the hours of its own sub-range [a, b]; otherwise that day's hours would appear twice.
    */
   async function iszz(station, param, fromMs, toMs, type = 0) {
     const code = paramCode(param);
     const chunks = [];
     const step = SITE.iszz.chunk_days * data_DAY;
-    for (let a = fromMs; a <= toMs; a += step) chunks.push([a, Math.min(toMs, a + step - data_HOUR)]);
+    // stamps are whole hours, so [ceil(from), floor(to)] holds every wanted hour and the chunks tile it exactly
+    const lo = ZgTime.ceilHour(fromMs), hi = ZgTime.floorHour(toMs);
+    for (let a = lo; a <= hi; a += step) chunks.push([a, Math.min(hi, a + step - data_HOUR)]);
     const out = [];
     for (const [a, b] of chunks) {
       const url = `${SITE.iszz.export}?postaja=${station}&polutant=${code}&tipPodatka=${type}`
@@ -374,7 +393,7 @@ const Live = (() => {
       const final = Date.now() - b > data_FINAL_AFTER_MS;
       const rows = await getJSON(url, { lane: 'iszz', ttl: final ? Infinity : data_TTL_RECENT_MS, source: 'iszz' });
       if (Array.isArray(rows) && rows.length >= SITE.iszz.max_rows) console.warn(t('data.err.truncated', { n: rows.length }), url);
-      for (const p of parseIszz(rows || [])) if (p.t >= fromMs && p.t <= toMs) out.push(p);
+      for (const p of parseIszz(rows || [])) if (p.t >= a && p.t <= b) out.push(p);
     }
     return out;
   }
