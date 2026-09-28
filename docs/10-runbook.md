@@ -121,21 +121,20 @@ python3 tests/browser/e2e.py --query "grid=coarse&live=0"
 
 ## 10.6 Deploy
 
-The repository is **private** (github.com/valentinopetric/zagreb-1-zrak), and publishing is opt-in.
-`.github/workflows/pages.yml` builds `dist/index.html` and publishes it, together with `docs/`, to GitHub Pages. It
-runs only when the repository variable `PAGES_ENABLED` is `true`; otherwise the job is skipped.
+The page is live at **https://valentinopetric.github.io/zagreb-1-zrak/**. The repository is public
+(github.com/valentinopetric/zagreb-1-zrak), and GitHub Pages builds from GitHub Actions.
 
-To publish:
+`.github/workflows/pages.yml` builds `dist/index.html` and publishes it, together with `docs/`. It runs on every
+push to `main`, and when `refresh-data.yml` dispatches it after a weekly data commit. The deploy job runs only when
+the repository variable `PAGES_ENABLED` is `true`, which is set (Settings → Secrets and variables → Actions →
+Variables).
 
-1. Settings → Pages → Source: *GitHub Actions*. On a free plan Pages needs a public repository; GitHub Pro allows it
-   for private ones. **A Pages site is publicly readable either way** (except on GitHub Enterprise).
-2. Settings → Secrets and variables → Actions → Variables → `PAGES_ENABLED` = `true`.
-3. Push to `main`, or run the workflow by hand (Actions → Pages → Run workflow).
-
-After that, every push to `main` and every weekly data refresh redeploys the page.
-
-To share the page without publishing it, send `dist/index.html`: it is a single self-contained file (three.js loads
-from jsDelivr).
+- **Stop publishing:** set `PAGES_ENABLED` to `false`, or disable Pages under Settings → Pages. A private
+  repository needs GitHub Pro for Pages, and a Pages site is publicly readable either way (except on GitHub
+  Enterprise).
+- **Set up Pages on a fork:** Settings → Pages → Source *GitHub Actions*, then add the variable.
+- **Deploy by hand:** Actions → Pages → Run workflow, or `gh workflow run pages.yml`.
+- **Share without hosting:** `dist/index.html` is one self-contained file (three.js loads from jsDelivr).
 
 ## 10.7 URL parameters
 

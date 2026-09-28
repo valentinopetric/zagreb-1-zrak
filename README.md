@@ -2,6 +2,8 @@
 
 **How traffic pollution moves around the ZAGREB-1 air-quality station, in 3D, in your browser.**
 
+**Live page: https://valentinopetric.github.io/zagreb-1-zrak/** (desktop browser with hardware acceleration recommended)
+
 The ZAGREB-1 station stands at the corner of Vukovarska and Miramarska in Zagreb. This page rebuilds the neighbourhood
 from the City of Zagreb's LiDAR-updated 3D model (ZG3D 2022). A GPU simulation blows the wind through it and lets the
 exhaust from each street spread. The result is compared with what the station actually measured. On the left is
