@@ -41,6 +41,11 @@ said where it matters in the chapters. Here it is in one place, ranked by how mu
    µg/m³. The model therefore says little about PM beyond "background plus a small traffic share". Winter PM episodes
    come from regional transport and domestic wood heating across the city, which is outside the 600 m domain.
 
+8. **CO and benzene are not reproduced.** On hourly data both reach only r ≈ 0.2–0.3 in the fit year and in 2026
+   ([docs/07 §11.3](07-calibration.md)). Their background is a constant, because no background station measures
+   them. The model's domestic heating emits no benzene, yet the winter benzene peaks (up to ~14 µg/m³ in January
+   2026) follow wood-burning PM. Treat the page's CO and benzene values as indicative.
+
 ## 9.2 Physics and numerics
 
 - **Neutral flow only.** The LBM wind is computed for neutral stratification (v1). Stability enters only through the

@@ -463,38 +463,78 @@ totals already use each held-out hour's own fold U0 (the review fix).
 
 ### 11.3 Out-of-sample check: fitted on 2025, predicting 2026
 
-![Model against the station, 2025 (fit) and 2026 (out of sample)](img/predictions_2025_2026.png)
+`tools/plot_predictions.py` keeps β = 2.98 and U0 = 1.95 m/s exactly as the page uses them, fitted on
+2025 only. It predicts every paired hour of 2025 and of 2026 (up to the last processed hour) through the calibration's
+own code path. It applies the same β and U0 to every pollutant through that pollutant's emission factors, as model.js
+`concentrations()` does.
 
-`tools/plot_predictions.py` keeps β = 2.98 and U0 = 1.95 m/s exactly as the page uses them. These
-values were fitted on 2025 only. The tool predicts every paired hour of 2025 and of 2026 (up to the last processed
-hour) through the calibration's own code path. The lines are daily means, and the scores use hourly pairs. The 2025
-scores are **in-sample**: the fit saw those hours. The half-year held-out scores for 2025 are in §9. The 2026 scores
-are a true **out-of-sample** test, on raw data that are not yet validated. The numbers are in
-`docs/img/predictions_2025_2026.json`.
+- **2025 is in-sample:** the fit saw those hours. The half-year held-out scores for 2025 are in §9.
+- **2026 is a true out-of-sample test**, on raw (not yet validated) data.
+- The numbers are in `docs/img/predictions_2025_2026.json`.
+- **Totals.**
+  - NO₂ and NOx: the chemistry of chapter 06 applied on the measured ZAGREB-4 background.
+  - PM₁₀ and PM₂.₅: the ZAGREB-4 measurement plus the local increment.
+  - CO and benzene: a constant background plus the local increment, because no background station measures them.
+- SO₂ is measured but not modelled.
 
-| Hourly scores | NO₂ total, 2025 | NO₂ total, 2026 | ΔNOx, 2025 | ΔNOx, 2026 | baseline ΔNOx, 2025 | baseline ΔNOx, 2026 |
-|---|---|---|---|---|---|---|
-| r | 0.75 | 0.66 | 0.48 | 0.42 | 0.48 | 0.45 |
-| FAC2 | 0.88 | 0.84 | 0.58 | 0.58 | 0.61 | 0.61 |
-| FB | -0.07 | -0.15 | +0.22 | +0.05 | +0.25 | +0.03 |
-| NMSE | 0.18 | 0.23 | 1.42 | 1.03 | 1.48 | 0.96 |
-| n | 7,422 | 6,219 | 7,672 | 6,280 | 7,672 | 6,280 |
+**Hourly, every modelled pollutant:**
+
+![Hourly: model against the station for every modelled pollutant, 2025 and 2026](img/predictions_hourly_2025_2026.png)
+
+**Hourly detail of the out-of-sample year** (a winter and a summer fortnight):
+
+![Hourly detail: 12–25 January and 6–19 July 2026](img/predictions_hourly_zoom_2026.png)
+
+**Daily means**, NO₂ and the local NOx increment:
+
+![Daily means: model against the station, 2025 (fit) and 2026 (out of sample)](img/predictions_2025_2026.png)
+
+**Hourly scores.** Mean is measured / model, in µg/m³ except CO. The FAC2 and log floor is 1 µg/m³, except CO
+0.05 mg/m³ and benzene 0.1 µg/m³.
+
+| Pollutant (total at ZAGREB-1) | r 2025 | r 2026 | FAC2 2025 | FAC2 2026 | FB 2025 | FB 2026 | mean 2025 | mean 2026 |
+|---|---|---|---|---|---|---|---|---|
+| NO₂ | 0.75 | 0.66 | 0.88 | 0.84 | -0.07 | -0.15 | 32.1 / 34.5 | 32.7 / 37.9 |
+| NOx | 0.78 | 0.68 | 0.81 | 0.83 | +0.14 | +0.03 | 72.3 / 62.9 | 61.8 / 60 |
+| PM₁₀ | 0.88 | 0.84 | 0.94 | 0.93 | -0.08 | +0.03 | 27.9 / 30.3 | 27.6 / 26.8 |
+| PM₂.₅ | 0.92 | 0.94 | 0.92 | 0.97 | -0.00 | +0.01 | 19.3 / 19.3 | 16.7 / 16.6 |
+| CO (mg/m³) | 0.30 | 0.27 | 0.68 | 0.33 | +0.10 | -0.56 | 0.251 / 0.227 | 0.128 / 0.226 |
+| benzene | 0.26 | 0.19 | 0.47 | 0.36 | +0.13 | +0.67 | 0.7 / 0.612 | 1.23 / 0.613 |
+| ΔNOx, local (3D model) | 0.48 | 0.42 | 0.58 | 0.58 | +0.22 | +0.05 | 46.7 / 37.5 | 38.4 / 36.5 |
+| ΔNOx, local (statistical baseline) | 0.48 | 0.45 | 0.61 | 0.61 | +0.25 | +0.03 | 46.7 / 36.3 | 38.4 / 37.2 |
 
 **Reading it honestly:**
-- **Total NO₂ holds up out of sample.** r falls from 0.75 to 0.66, and 84 % of 2026 hours stay within a factor of 2.
-  The model is about 15 % high in 2026 (FB −0.15), where it was about 7 % high in 2025. The raw 2026 data are one
-  candidate cause: validation changes NOx by a few µg/m³ (docs/01 §10). The traffic and fleet of 2026 are another.
-- **The local increment loses skill against the baseline in 2026.** r is 0.42 against 0.45, FAC2 0.58 against 0.61,
-  and NMSE 1.03 against 0.97. In 2025 the two were level. So out of sample, the 3D model's hour-to-hour NOx
-  increment is **not** better than the statistical hour-of-week × wind-sector model fitted on the same year. Its
-  bias is good (FB +0.05). Its value is the physical explanation and the what-if scenarios, not a better hourly
-  forecast of the increment.
-- **Both models miss the big episodes.** These are the winter inversion days of November–December 2025 (daily ΔNOx up
-  to 260 µg/m³) and a two-week June 2026 event (up to 160 µg/m³). The June event looks local: a construction site or
-  a traffic diversion is plausible, but not confirmed. Neither model knows about such events; the 100 m lid floor
-  and three stability groups cannot reproduce the shallowest inversions (§10, docs/09 §9.1).
+- **NO₂ and NOx hold up out of sample, and the hourly detail shows why.**
+  - The model follows the rush-hour peaks and the night minima day by day, also on days it has never seen.
+  - r drops from 0.75 to 0.66 (NO₂) and from 0.78 to 0.68 (NOx), and more than 80 % of 2026 hours stay within a
+    factor of 2.
+  - NO₂ is about 15 % high in 2026. The raw 2026 data are a candidate cause, since validation changes NOx by a few
+    µg/m³ (docs/01 §10).
+- **PM scores are high, but mostly thanks to the background.**
+  - The local PM increment is small (1–3 µg/m³, chapter 05), so the modelled total is almost the ZAGREB-4
+    measurement.
+  - The high r (0.84–0.94) shows that PM at the corner is regional, not that the street model is good.
+- **CO and benzene are not reproduced** (r 0.2–0.3). Three reasons:
+  1. Their background is a constant, because no background station measures them.
+  2. The winter benzene peaks, up to about 14 µg/m³ in January 2026, are absent from the model. In the model, domestic
+     heating emits no benzene (chapter 05). Wood burning is the likely source, and the peaks line up with PM₂.₅.
+  3. Raw 2026 CO is reported to 0.1 mg/m³ only and drifts to ≤ 0 in summer (analyser zero drift, docs/01 §10), and raw
+     2026 benzene averages 1.8× the validated 2025 level.
 
-Re-run after every recalibration or data refresh: `python3 tools/plot_predictions.py` (needs matplotlib, dev only).
+  Treat the page's CO and benzene numbers as indicative.
+- **The local NOx increment does not beat the statistical baseline out of sample.** In 2026 the baseline scores r 0.45
+  against the model's 0.42; in 2025 they were level. The 3D model's value is the physical explanation (which street,
+  which wind) and the what-if scenarios, not a better hour-by-hour forecast of the increment.
+- **Events the model cannot know about.**
+  - **17–23 June 2026:** ZAGREB-1 NOx stays at or above 118 µg/m³ day and night, and NO₂ at 50–80, while ZAGREB-4 is
+    normal. That points to a continuous local source (a generator or works near the station) or an analyser fault. It
+    is raw data and will be checked against the validated release.
+  - **Winter inversions:** the November–December 2025 inversion days, with a daily ΔNOx of up to 260 µg/m³, are under-
+    predicted. The 100 m lid floor and three stability groups cannot reproduce the shallowest inversions (§10, docs/09
+    §9.1).
+
+Re-run after every recalibration or data refresh: `python3 tools/plot_predictions.py` (needs matplotlib, dev only;
+`--zoom` picks the two fortnights).
 
 ## 12. Limitations and caveats
 
