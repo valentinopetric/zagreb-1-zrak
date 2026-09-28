@@ -264,8 +264,8 @@ As implemented after the physics review (2026-09-28; scalar.js `ScalarField.rece
   3×3×2 block shifted half a cell downstream.)
 - LUTs exported after the review also carry `quality: [dir][class] {sweeps, converged, reason, mass_err, mass_ok}`,
   and `tools/export_lut.py --check` warns about entries that did not converge or miss the mass tolerance. Older
-  files have no `quality` and have the first band: the embedded 10 m LUT of 2026-09-27, and the 5 m export started
-  on 2026-09-28 at 09:28 with the code of that moment (docs/11 §11.6).
+  files have no `quality` and have the first band: the first 10 m LUT of 2026-09-27, and the embedded 5 m LUT
+  (exported 2026-09-28, 09:28–12:34, with the code of 09:28; its `meta.notes` says so; docs/11 §11.6).
 
 ## 5. Physics contract (summary; the full spec is `docs/research/physics.md` with the critic's §4 corrections)
 

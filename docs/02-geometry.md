@@ -706,7 +706,8 @@ parts. ZG3D and the DGU DTM are both HVRS71 and agree to about 0.1 m. 400 parts 
   is relative to the heating area. Rates are order-of-magnitude only (critic G14).
 - **Frame.** Since 2026-09-28 the local frame uses the exact WGS84 metres per degree and is isometric to about
   0.01 % within the scene (§2.3). The first build's frame was 0.17 % (E–W) and 0.55 % (N–S) short of true metres;
-  the embedded 10 m LUT and its calibration were computed on that geometry (docs/07 §11.1). The remaining
+  the first 10 m LUT and its calibration were computed on that geometry (docs/07 §11.1). The embedded 5 m LUT and the
+  current calibration use the exact frame (docs/07 §11.2). The remaining
   approximation is the flat ground (the terrain varies by 14 m over the box).
 - **OSM staleness.** The fallback Overpass mirror can be months old. The fetch meta records it.
 - **Service stability.** The ArcGIS item may be renamed with the next ZG3D release (lidar-3d §8.3). The

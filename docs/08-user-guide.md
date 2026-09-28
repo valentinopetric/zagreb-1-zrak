@@ -75,7 +75,7 @@ says why.
   choice is remembered in the browser (`localStorage`, key `z1.lang`). `?lang=en` in the URL forces a language.
 - **Mode line**: the mode (§2) and the selected hour as a local interval.
 - **Model line**: one quiet line that says which model runs and where the station numbers of this hour come
-  from, e.g. "Model: 3D wind and dispersion simulation, calibrated on 2025 measurements (β = 3.09). Station
+  from, e.g. "Model: 3D wind and dispersion simulation, calibrated on 2025 measurements (β = 2.98). Station
   numbers: response table on the 10 m grid." It says "raw physics (β = 1, not calibrated)" when that switch is on,
   "a field computed in this browser" when a live field is used, and "approximate model" while neither exists. When
   the browser cannot run the 3D simulation at all, it says so with an amber rule. **How good is it?** opens the
@@ -286,7 +286,7 @@ benzene) show the NOₓ rose, as the note says.
   NAD < 0.50. ✓ and ✗ mark each value. MG, VG and R have no urban criterion. The physics model should beat the
   baseline on R, VG and NMSE before any claim of skill (physics §10.5, critic §4.7);
 - a one-line **verdict** under the table, computed from these numbers: on which of R, NMSE and VG the model beats the
-  baseline and on which it does not (with the 10 m LUT of 2026-09-28: better on R and NMSE, worse on VG).
+  baseline and on which it does not (with the 5 m LUT of 2026-09-28: better on R, NMSE and FB, worse on VG and FAC2).
 
 **Response table and fallback** states honestly which path the numbers take: a LUT (with its grid and date), none
 yet, no GPU (approximate model), or a missing module. On software WebGL it adds that the 3D is redrawn less often

@@ -139,9 +139,8 @@ The git history records the build in four commits (`git log --stat`):
    at its start, so this export runs the current geometry with the code of 09:28. The band-centring and per-entry
    quality fixes of the physics review (item 5; `scalar.js` and `aero.js` were last written at 10:12–10:14) are not
    in it. They do not change Γ or the age A; the LUT's `band` is the first, shifted block and it has no `quality`.
-   When it finishes, `src/data/lut_receptor.json` and `src/data/calibration.json` are replaced and
-   `tools/calibrate.py` regenerates docs/07-calibration.md §9 by itself. Until then the page and the docs use the
-   10 m LUT and its first calibration.
+   It finished at 12:34 (48/48 jobs, 11,160 s). It was installed as `src/data/lut_receptor.json`, and `tools/calibrate.py`
+   refitted β = 2.98 and U0 = 1.95 m/s and regenerated docs/07-calibration.md §9 (item 7).
 5. **Three independent reviews**, while the 5 m export ran. Three reviewers checked (a) physics and units, (b) data
    and time, and (c) UI and accessibility. Each was told to verify every finding with a computation or test before
    reporting it, and to fix only confirmed bugs in its own scope, with a regression test. The confirmed findings and
@@ -178,6 +177,20 @@ The git history records the build in four commits (`git log --stat`):
      - chart time axes choose their tick step from the plot width, so date labels never overlap.
 
    With the regression tests the suite grew from 117 to 120 Python tests and from 75 to 85 in-page tests.
+6. **Documentation consistency pass** (commit `683c920`):
+   - a link checker found 0 broken links among 168 relative links and images, and 3 stale section references, which
+     were fixed;
+   - every number was re-checked against the current data;
+   - every runbook command was checked against its `--help`;
+   - one contradiction was fixed: the lid control is display-only.
+7. **5 m LUT and final calibration.**
+   - The 5 m export finished at 12:34: 48/48 jobs, 11,160 s, no page errors, `--check` OK.
+   - It was installed, the 10 m LUT was kept in `data/cache/lut/`, and `tools/calibrate.py` was re-run:
+     - β = 2.98, U0 = 1.95 m/s;
+     - held-out NOx increment: r 0.48, NMSE 1.45, FAC2 0.57, against the baseline's r 0.46, NMSE 1.53, FAC2 0.58;
+     - held-out total NO₂: r 0.74, FAC2 0.87, MQI 0.54 (docs/07 §11.2).
+   - Then the full test suite ran, including the slow GPU verification, and the end-to-end test ran on both grids
+     (§11.8).
 
 ## 11.7 How to repeat this for another station
 
@@ -201,3 +214,30 @@ The git history records the build in four commits (`git log --stat`):
 | Tests (commit `920d739`) | 120 Python unit tests (`test_iszz.py` 54, `test_geometry.py` 44, `test_aqmodel.py` 22); 85 in-page tests (78 fast, 7 slow: flow 17, models 16, scalar 14, scene 18, ui 20); an end-to-end browser test |
 | Documentation | chapters 00–12, the architecture contract, glossary and references (about 6,600 lines), plus the five research reports (about 3,900 lines) |
 | External data | ISZZ (about 1,300 paced requests for the full history), Open-Meteo (a few), ZG3D (12 pages and a count query), DGU DTM (1 range request), Overpass (7 queries) |
+
+### 11.8.1 Final verification (2026-09-28, 12:41–13:11, on the 5 m LUT)
+
+Everything below was run by `data/cache/full_tests.sh` (not in git) in one detached session, after the 5 m LUT and
+its calibration were installed:
+
+| Check | Command | Result |
+|---|---|---|
+| Python unit tests | `python3 -m unittest discover -s tests/python` | **120 / 120 OK** |
+| In-page suite, all tests incl. slow GPU verification | `tests/browser/run_selftest.py --timeout 7200` | **85 passed, 0 failed**, no page errors (10 min on SwiftShader) |
+| End to end, 10 m grid | `tests/browser/e2e.py --query "grid=coarse&live=0"` | **PASS**: station NO₂ 37.8 µg/m³ today, 41.2 with tree rows (LUT, calibrated β 2.98) |
+| End to end, 5 m grid | `tests/browser/e2e.py --query "grid=fine&live=0" --wait 3000` | **PASS**: 37.8 today, 43.0 with tree rows (the scenario's own 5 m field); 17.5 min |
+| LUT schema | `tools/export_lut.py --check src/data/lut_receptor.json` | OK (`120x120x32@5m`); warns that it has no per-entry `quality` (exported before that fix) |
+
+Numbers the slow tests measured (docs/04 §9 and docs/03 §8):
+
+| Test | Measured | Criterion |
+|---|---|---|
+| T1: analytic ground line source | max error 1.9 % (TVD), 3.0 % (upwind) | < 5 % |
+| T2: mass balance | outflow/source 1.000 | ± 1 % |
+| T3: grid convergence 10 m → 5 m, LBM flow | Γ 0.0342 → 0.0263, GCI 12.5 % (p = 2) | reported |
+| T4: canyon W/H = 1, LBM flow | leeward/windward 1.33 (2.41 with a prescribed vortex) | > 1 |
+| T5: symmetry | 7.7·10⁻⁷ | 10⁻⁴ |
+| T6: linearity | homogeneity exact; superposition 0.43 % (TVD non-linearity) | documented |
+| One direction, full pipeline, SwiftShader | 20.5 s at 10 m, 364.5 s at 5 m (3.0 M cell-steps/s) | – |
+| Doubling the fine warm-up (10 m) | 9.6 % RMS speed change within 100 m of the station | reported |
+| Tree-row wake at 7.5 m | 0.41–0.59 of the free wind in leaf, 0.73–0.83 leafless (1–6 tree heights behind) | plausible windbreak |

@@ -118,9 +118,9 @@ flowchart LR
 - **Geometry:** `env.json` of 2026-09-28 (after the frame fix): 4,275 building parts (4,196 ZG3D, 79 OSM), 3,255
   roads, 1,807 trees, 116 heating tiles ([02 Geometry](02-geometry.md) §2.0).
 - **Measurements:** ISZZ 2023-01-01 → 2026-09-27, the page embeds the last 400 days ([01 Data sources](01-data-sources.md)).
-- **Model:** the embedded receptor LUT is the first one, on the 10 m grid, computed on the geometry before the frame
-  fix. A 5 m LUT is being exported; when it is in, the calibration is redone and [07 Calibration](07-calibration.md)
-  §9 is regenerated. Quote calibration numbers from there.
+- **Model:** the embedded receptor LUT is on the 5 m grid (`120x120x32@5m`, 2026-09-28), with a calibration fitted
+  on it: β = 2.98, U0 = 1.95 m/s. On held-out months: r 0.48 and FAC2 0.57 for the NOx increment; r 0.74 and FAC2 0.87
+  for total NO₂ ([07 Calibration](07-calibration.md) §9, §11.2; quote numbers from there).
 - **Tests:** 120 Python unit tests and 85 in-page tests (78 fast, 7 slow), plus an end-to-end browser test
   ([10 Runbook](10-runbook.md) §10.5).
 

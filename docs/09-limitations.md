@@ -15,19 +15,22 @@ said where it matters in the chapters. Here it is in one place, ranked by how mu
    [05 Emissions](05-emissions.md) §10). That is typical for street-scale models with default emission factors and
    unresolved traffic turbulence. The page shows "raw physics" and "calibrated" separately
    ([07 Calibration](07-calibration.md)).
-3. **Skill is modest.** On held-out months the 3D model reaches r ≈ 0.49 and FAC2 ≈ 0.59 for hourly NOx increments.
-   That is only slightly better than a statistical hour-of-week × wind-sector baseline (r ≈ 0.46), and better than the
-   Gaussian fallback (r ≈ 0.37). The Gaussian fallback does **not** beat the baseline. Hour-to-hour variability from
-   traffic incidents, meandering winds and inversions is largely unexplained. These numbers are from the first 3D
-   calibration, on the 10 m grid; [docs/07 §9](07-calibration.md) is regenerated after each recalibration and holds
-   the current ones.
+3. **Skill is modest.** On held-out months the 3D model (5 m grid) reaches r ≈ 0.48, FAC2 ≈ 0.57 and NMSE ≈ 1.45
+   for hourly NOx increments.
+   - That is only slightly better than a statistical hour-of-week × wind-sector baseline (r ≈ 0.46, NMSE 1.53). It is
+     worse on VG and FAC2.
+   - It is clearly better than the Gaussian fallback (r ≈ 0.37). The Gaussian fallback does **not** beat the baseline.
+   - For total NO₂ the numbers look much better (r ≈ 0.74, 87 % within a factor of 2). Most of that comes from the
+     measured background and the chemistry, not from the local model.
+   - Hour-to-hour variability from traffic incidents, meandering winds and inversions is largely unexplained.
+   - [docs/07 §9](07-calibration.md) is regenerated after each recalibration and holds the current numbers.
 4. **The wind forcing is a 9 km weather model.** ECMWF IFS gives one wind for the whole neighbourhood. Its direction
    error against station vanes is 24–37° (median) and it has calm spells (31 % of hours below 1 m/s). The street-level
    flow is simulated, but the forcing is not local.
 5. **Low wind is parameterised, not simulated.** Below about 1.5 m/s, dispersion is dominated by meandering and
    traffic-produced turbulence. The model represents both with one fitted speed U₀ in U_eff = √(U² + U₀²) and by
    averaging over directions. The fit puts U₀ at 1.3–1.8 m/s depending on the model (1.30 m/s for the Gaussian
-   fallback, 1.80 m/s for the 3D model on the 10 m grid; docs/07). Most Zagreb hours are in this regime.
+   fallback, 1.95 m/s for the 3D model on the 5 m grid; docs/07). Most Zagreb hours are in this regime.
 6. **Night-time is under-predicted.** Observed/modelled ratios are 2–3 at 02–06 h for the fallback model (docs/07
    §10), and about 2 for the 3D model on the 10 m grid (docs/07 §9). Likely reasons: stable layers shallower than
    the model's lid floor (100 m),

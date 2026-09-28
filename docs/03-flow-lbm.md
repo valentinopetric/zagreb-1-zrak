@@ -584,7 +584,7 @@ second layer (5–10 m) at 5 m. Consequences:
 3. The **recommended production LUT is 5 m**: it is the grid the app uses on any real GPU, and it resolves the 9–12 m
    kerb distance with 2 cells instead of 1. The 10 m LUT is a stop-gap for machines without a GPU and is labelled as such.
 
-A 10 m LUT exported with `tools/export_lut.py --grid coarse` is reported in §8.3.
+The 10 m LUT exported with `tools/export_lut.py --grid coarse` is reported in §8.3. The 5 m production LUT is in §8.4.
 
 ### 8.3 The 10 m LUT, exported end to end
 
@@ -627,6 +627,31 @@ SwiftShader) once geometry and solver are final, and re-run the calibration afte
 moment, so it also has the first band and no `quality` (docs/11 §11.6 item 4).
 
 ---
+
+### 8.4 The 5 m LUT (production), exported end to end
+
+`tools/export_lut.py --grid fine --timeout 30000`, run on 2026-09-28 from 09:28 to 12:34 in a detached tmux session
+(docs/10 §10.4). The machine was shared with review agents and headless test runs, and the 3D views were drawn at
+most every 10 s.
+
+| | |
+|---|---|
+| Result | **48 of 48 jobs in 11,160 s (3.1 h), 0 failed, complete** |
+| Output | `src/data/lut_receptor.json` (18 kB, `meta.grid` = `120x120x32@5m`) |
+| Geometry | the rebuilt env.json of 2026-09-28T07:26:42Z (exact frame constants, 4,275 building parts) |
+| Timing | about 7 min per new direction (spin-up, fine flow and first scalar solve); 2–3 min for each further stability group, which reuses the flow |
+| Validation | `--check` OK; no page errors in the log |
+| Known gaps | exported with the page as built at 09:28, so it has no per-entry `quality` and its band is the pre-fix one (`meta.notes`). Γ and A are unaffected |
+
+Γ(5 m)/Γ(10 m), median over the 16 directions:
+
+| Class | A | B | C | D |
+|---|---|---|---|---|
+| AC | 0.88 | 0.95 | 0.91 | 0.75 |
+| D | 1.28 | 0.83 | 0.87 | 0.61 |
+| EF | 1.39 | 0.85 | 0.88 | 0.64 |
+
+The calibration on this LUT is in docs/07 §9 and §11.2.
 
 ## 9. Parameters
 
