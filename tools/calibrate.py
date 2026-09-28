@@ -56,10 +56,9 @@ try:  # optional speed-up
 except Exception:  # pragma: no cover - numpy is optional
     np = None
 
-# Development-only fallback inputs: the research caches of docs/research/ (not part of the repo). Override with the
-# environment variable Z1_RESEARCH_DATA; the default is where the research agents left them on the build machine.
-RESEARCH = Path(os.environ.get("Z1_RESEARCH_DATA", "/tmp/claude-1001/-home-valentino-lidar-zagreb-test/"
-                               "3f3f8e4e-26fc-4ba8-bbdf-26d040362cb2/scratchpad/research/data"))
+# Development-only fallback inputs: the research caches of docs/research/ (not part of the repo). Point the
+# environment variable Z1_RESEARCH_DATA at them; the default is the gitignored data/cache/research/.
+RESEARCH = Path(os.environ.get("Z1_RESEARCH_DATA", str(ROOT / "data" / "cache" / "research")))
 C0 = 10.0                           # µg/m³, log-objective offset (physics Eq. 10.2)
 U0_GRID = [round(0.5 + 0.05 * i, 2) for i in range(51)]   # 0.50 .. 3.00 m/s (critic §4.5 range 1.0–2.0, widened)
 LNB_RANGE = (math.log(0.05), math.log(50.0))               # β search range (critic §4.5: 0.5–8, widened)
