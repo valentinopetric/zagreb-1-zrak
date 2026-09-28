@@ -121,14 +121,21 @@ python3 tests/browser/e2e.py --query "grid=coarse&live=0"
 
 ## 10.6 Deploy
 
-`.github/workflows/pages.yml` builds `dist/index.html` on every push to `main` and publishes it to GitHub Pages,
-together with `docs/`. The data refresh workflow dispatches it after each data commit. To enable it, go to Settings →
-Pages → Source: *GitHub Actions*.
+The repository is **private** (github.com/valentinopetric/zagreb-1-zrak), and publishing is opt-in.
+`.github/workflows/pages.yml` builds `dist/index.html` and publishes it, together with `docs/`, to GitHub Pages. It
+runs only when the repository variable `PAGES_ENABLED` is `true`; otherwise the job is skipped.
 
-`.github/workflows/tests.yml` runs on every push to `main` and on pull requests: the Python tests,
-`tools/build.py --test`, `tools/export_lut.py --check src/data/lut_receptor.json`, then the fast in-page tests
-(`run_selftest.py --skip-slow`) and a smoke test (`smoke.py --query "grid=coarse&live=0"`) in headless Chromium. The
-slow tests run only locally (§10.5).
+To publish:
+
+1. Settings → Pages → Source: *GitHub Actions*. On a free plan Pages needs a public repository; GitHub Pro allows it
+   for private ones. **A Pages site is publicly readable either way** (except on GitHub Enterprise).
+2. Settings → Secrets and variables → Actions → Variables → `PAGES_ENABLED` = `true`.
+3. Push to `main`, or run the workflow by hand (Actions → Pages → Run workflow).
+
+After that, every push to `main` and every weekly data refresh redeploys the page.
+
+To share the page without publishing it, send `dist/index.html`: it is a single self-contained file (three.js loads
+from jsDelivr).
 
 ## 10.7 URL parameters
 
