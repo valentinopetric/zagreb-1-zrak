@@ -461,6 +461,41 @@ totals already use each held-out hour's own fold U0 (the review fix).
 - It is too low for SSW–SW winds, 1.8–1.9.
 - It is too high for W–WNW, 0.57–0.76.
 
+### 11.3 Out-of-sample check: fitted on 2025, predicting 2026
+
+![Model against the station, 2025 (fit) and 2026 (out of sample)](img/predictions_2025_2026.png)
+
+`tools/plot_predictions.py` keeps β = 2.98 and U0 = 1.95 m/s exactly as the page uses them. These
+values were fitted on 2025 only. The tool predicts every paired hour of 2025 and of 2026 (up to the last processed
+hour) through the calibration's own code path. The lines are daily means, and the scores use hourly pairs. The 2025
+scores are **in-sample**: the fit saw those hours. The half-year held-out scores for 2025 are in §9. The 2026 scores
+are a true **out-of-sample** test, on raw data that are not yet validated. The numbers are in
+`docs/img/predictions_2025_2026.json`.
+
+| Hourly scores | NO₂ total, 2025 | NO₂ total, 2026 | ΔNOx, 2025 | ΔNOx, 2026 | baseline ΔNOx, 2025 | baseline ΔNOx, 2026 |
+|---|---|---|---|---|---|---|
+| r | 0.75 | 0.66 | 0.48 | 0.42 | 0.48 | 0.45 |
+| FAC2 | 0.88 | 0.84 | 0.58 | 0.58 | 0.61 | 0.61 |
+| FB | -0.07 | -0.15 | +0.22 | +0.05 | +0.25 | +0.03 |
+| NMSE | 0.18 | 0.23 | 1.42 | 1.03 | 1.48 | 0.96 |
+| n | 7,422 | 6,219 | 7,672 | 6,280 | 7,672 | 6,280 |
+
+**Reading it honestly:**
+- **Total NO₂ holds up out of sample.** r falls from 0.75 to 0.66, and 84 % of 2026 hours stay within a factor of 2.
+  The model is about 15 % high in 2026 (FB −0.15), where it was about 7 % high in 2025. The raw 2026 data are one
+  candidate cause: validation changes NOx by a few µg/m³ (docs/01 §10). The traffic and fleet of 2026 are another.
+- **The local increment loses skill against the baseline in 2026.** r is 0.42 against 0.45, FAC2 0.58 against 0.61,
+  and NMSE 1.03 against 0.97. In 2025 the two were level. So out of sample, the 3D model's hour-to-hour NOx
+  increment is **not** better than the statistical hour-of-week × wind-sector model fitted on the same year. Its
+  bias is good (FB +0.05). Its value is the physical explanation and the what-if scenarios, not a better hourly
+  forecast of the increment.
+- **Both models miss the big episodes.** These are the winter inversion days of November–December 2025 (daily ΔNOx up
+  to 260 µg/m³) and a two-week June 2026 event (up to 160 µg/m³). The June event looks local: a construction site or
+  a traffic diversion is plausible, but not confirmed. Neither model knows about such events; the 100 m lid floor
+  and three stability groups cannot reproduce the shallowest inversions (§10, docs/09 §9.1).
+
+Re-run after every recalibration or data refresh: `python3 tools/plot_predictions.py` (needs matplotlib, dev only).
+
 ## 12. Limitations and caveats
 
 - **One station, one year.** Everything is fitted at ZAGREB-1 for 2025 (September is excluded: 54 % capture).

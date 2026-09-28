@@ -25,6 +25,7 @@ python3 -m playwright install chromium               # (add --with-deps on a fre
 | Refresh geometry | `make geometry` | ZG3D, DGU, Overpass | 2–5 min |
 | Export the receptor LUT | `make lut` (= `python3 tools/export_lut.py`) | three.js | 15 min at 10 m, 3.5–4.5 h at 5 m on SwiftShader, minutes on a real GPU |
 | Recalibrate | `make calibrate` | no | 10–60 s |
+| Plot model against measurements (2025 fit, 2026 out of sample) | `python3 tools/plot_predictions.py` (matplotlib) | no | 5 s |
 
 ## 10.2 Refresh the measurements (weekly, automated)
 

@@ -1,3 +1,4 @@
 # Optional, for development only. The data pipeline and the page need nothing beyond Python 3 stdlib.
 playwright>=1.49     # browser tests (tests/browser) and LUT export (tools/export_lut.py); then: python -m playwright install chromium
 numpy>=1.26          # optional speed-up in tools/calibrate.py
+matplotlib>=3.8     # tools/plot_predictions.py (the 2025 fit / 2026 out-of-sample figure, docs/07 §11.3)
