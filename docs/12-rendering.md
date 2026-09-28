@@ -29,7 +29,7 @@ The three files and their public names:
 |---|---|
 | `scene.js` | `canvas`, `renderer`, `scene`, `sun`, `hemi`, `sky`, `skyUniforms`, `M`, `flatGeometry`, `ribbonGeometry`, `addMesh`, `timeUniform`, `setDaylight` |
 | `city.js` | `SCENARIOS`, `CITY_SOURCE_GROUPS`, `buildCity`, `scenarioLayer`, `cityView`, `cityGeometry`, `setCustomBlock`, `setLeaves`, `colorBuildings`, `setXray`, `setLod2`, `decodeLod2`, `buildingLegendHTML` |
-| `visuals.js` | `CONC_SCALES`, `concColor`, `concBand`, `setConcPalette`, `legendHTML`, `particleLegendHTML`, `ConcSlice`, `Particles`, `WindStreaks`, `LabelLayer` |
+| `visuals.js` | `CONC_SCALES`, `INC_SCALES`, `concColor`, `concBand`, `concT`, `setConcPalette`, `legendHTML` (optional second argument `{what, bg, h, compact}`), `particleLegendHTML`, `ConcSlice` (plus `setDim`), `Particles`, `WindStreaks`, `LabelLayer` (`update` takes optional `blockers`) |
 
 Private helpers are prefixed `sc_` (scene.js), `ct_` (city.js) and `vis_` (visuals.js). The module
 is one shared scope (architecture §3), so the prefixes are what keeps the names apart.
@@ -510,7 +510,53 @@ view, shown only while that view is drawn.
 
 ### 6.1 Concentration colour scales
 
-`CONC_SCALES[p]` holds, for each of nox, no2, pm10, pm25, co, c6h6, o3 and so2:
+There are two scales, one for each thing the slice can show (the panel's "The slice colour shows" switch, main.js
+`state.sliceWhat`):
+
+- **local sources** (the default since the UI review of 2026-09-28): the local increment, what traffic and domestic
+  heating add on top of the background, on a continuous linear scale from zero (`INC_SCALES`, below);
+- **total**: background + increment in the EAQI bands or limit-value bands (`CONC_SCALES`).
+
+**Why the increment is the default.** The background at the station is one number for the whole domain (ZAGREB-4 at
+that hour), so the total is the increment plus a constant. With a NO₂ background of 20.6 µg/m³, the total put nearly
+the whole 600 m domain into the "moderate" band (25–60 µg/m³) and the rest into "fair", so the map was an almost
+uniform violet veil and the street-scale structure the 3D model computes was invisible. Measured in the headless
+check (10 m grid, NE 1.7 m/s, neutral, 4 m, calibrated): NO₂ total 20.6–99.7 µg/m³ with half of the cells between 31
+and 54; the increment spans 0–79 µg/m³ (median 19.5, p90 52, p99 70).
+
+**Why linear.** A logarithmic scale over two decades was tried first. It spent half of its colour range on the far
+field (1–10 µg/m³) and squeezed the near-road values (30–80 µg/m³) into its top fifth, so the map still read as a
+veil. Linear from zero puts the colour range where the gradients are (along and downwind of the roads), and "twice as
+dark" means about twice as much.
+
+**Local-increment scales `INC_SCALES[p]`** (`{kind: 'lin', lo, hi, ticks, stops, lut}`):
+
+| Pollutant | hi (darkest from here) | Ticks | lo = hi / 40 (not coloured below) | Increment in the check above (median / p99 / max) |
+|---|---|---|---|---|
+| NO₂ | 80 µg/m³ | 0 20 40 60 80 | 2 | 19.5 / 70 / 79 |
+| NOₓ | 300 µg/m³ | 0 100 200 300 | 7.5 | 34 / 264 / 338 |
+| PM₁₀ | 30 µg/m³ | 0 10 20 30 | 0.75 | 3.2 / 24 / 31 |
+| PM₂.₅ | 20 µg/m³ | 0 5 10 15 20 | 0.5 | 2.2 / 17 / 22 |
+| CO | 0.3 mg/m³ | 0 0.1 0.2 0.3 | 0.0075 | 0.034 / 0.26 / 0.33 |
+| Benzene | 2 µg/m³ | 0 0.5 1 1.5 2 | 0.05 | 0.25 / 1.9 / 2.4 |
+
+- t = v / hi, clamped to [0, 1]. hi is about the 99th percentile of the default case, rounded. The scales are fixed
+  per pollutant (not stretched to each field), so a windy hour looks cleaner than a calm one, as it should, and the
+  two views always share one scale. In calm, stable hours part of the map saturates at the darkest stop; the legend
+  says "darkest from hi up".
+- Colour: seven stops of one violet hue (OKLCH h = 310°, the hue of the band ramp), lightness 0.81 → 0.29 in equal
+  steps: `#d8abfa #c780f7 #aa64d9 #8e48bb #732a9d #5b1081 #3f085c`, interpolated in a 256-entry table. Opacity rises
+  with t from 0.12 to 0.90, so low values recede toward the ground and the plume stands out. Every stop is darker than
+  the ground `#d6d4cb`, so the lightness the eye sees (colour over ground at its opacity) falls monotonically; the
+  test checks exactly that.
+- Validator (dataviz skill, `--ordinal`, on the ground): monotone L pass, adjacent ΔL ≥ 0.06 pass, single hue pass
+  (spread 1°). The light end is below 2:1 against the ground by design: the near-zero end of a continuous ramp
+  recedes (dataviz palette.md, "Sequential hue").
+- Below lo the cell fades out linearly and is transparent at lo / 2, so the far field is not coloured and the plume
+  has no hard edge; at and above hi the colour stays at the darkest stop.
+- NO₂ uses the chemistry per cell: total NO₂ minus the NO₂ background (model.js `cellValue` with `met.incOnly`).
+
+`CONC_SCALES[p]` (the "total" map) holds, for each of nox, no2, pm10, pm25, co, c6h6, o3 and so2:
 
 - five break points (upper bounds of bands 1–5) and six colours;
 - the band names (EAQI pollutants only);
@@ -555,12 +601,24 @@ band's opacity (non-finite values give a fully transparent colour).
   background (NO₂ ≈ 20 µg/m³ at ZAGREB-4, band 2), most of the domain sits in bands 1–2. The visual
   check showed that a heavier veil there hid the streets, so the low bands stay below 40 %.
 
-**Legend** (`legendHTML(p)`): a title with the label and unit (from `POLLUTANT_INFO` when present),
-six rows (swatch, range text and, for EAQI pollutants, the band name) and a note naming the band
-source. The swatch is `aria-hidden`; the text carries the meaning (architecture §7).
+**Legend** (`legendHTML(p, {what, bg, h, compact})`; `legendHTML(p)` alone gives the band legend as before):
 
-CSS classes used: `legend`, `legend-conc`, `legend-title`, `legend-swatch`, `legend-range`,
-`legend-name`, `legend-note`. `buildingLegendHTML()` and `particleLegendHTML()` use the same classes,
+- `what: 'inc'`: a title with the pollutant, unit and slice height ("NO₂ from local sources · µg/m³ · 4 m above
+  ground"), the continuous ramp (`role="img"` with an `aria-label` naming its range) with its ticks, and a note
+  naming the background it sits on (the same everywhere on the map), the linear scale, and what happens below lo and
+  above hi;
+- `what: 'total'`: the title (with "background + local sources"), six rows (swatch, range and, for EAQI pollutants,
+  the band name) and a note naming the band source and the background;
+- `compact: true`: the strip in the card of the first visible 3D view (main.js puts it there; style.css hides the
+  second view's copy in split view): a short title and the ramp or the six band cells with their breaks.
+
+Swatches and the ramp are pre-blended with the ground at the slice's opacity (`vis_overGround`), so the legend shows
+the colours as they appear on the map, not the unblended texture colours. They are `aria-hidden` or labelled; the
+text carries the meaning (architecture §7).
+
+CSS classes used: `legend`, `legend-conc`, `legend-inc`, `compact`, `legend-title`, `legend-swatch`,
+`legend-range`, `legend-name`, `legend-note`, `legend-ramp`, `legend-ticks` (`legend-tick`, `first`, `last`),
+`legend-cells` (`legend-cell`), `legend-bands`. `buildingLegendHTML()` and `particleLegendHTML()` use the same classes,
 plus `legend-buildings`, `legend-particles` and `legend-dot`.
 
 ### 6.2 Concentration slice (`ConcSlice`)
@@ -582,6 +640,14 @@ plus `legend-buildings`, `legend-particles` and `legend-dot`.
   faintly rather than cut hard.
 - **Rebuilds.** The texture is rebuilt only when the field, height, `valueFn` or scale change, so
   the caller should keep the same function object until its inputs change.
+- **Scale.** `scale` is a `CONC_SCALES` entry (bands) or an `INC_SCALES` entry (continuous log); `concColor`
+  handles both.
+- **Stale fields.** `setDim(true)` draws the slice at 45 % opacity. main.js uses it while the page shows the previous
+  run's field during a new computation, the map counterpart of the grey numbers.
+- **Alignment check** (headless, 2026-09-28): the texture colour at a texel equals the colour of
+  `ScalarField.sample()` at that texel's world position (mesh `localToWorld`), and for a wind from the NE the
+  NOₓ increment 20–40 m south (downwind) of Vukovarska is 3–5× the value on the north side, so the plume lies
+  downwind of the roads. The edge fade covers the outer 80 m of the rotated 600 m tunnel.
 - **No tone mapping.** The slice is drawn with `toneMapped: false`, so at full opacity the screen
   colour is the legend colour. (The reference's wind slice went through ACES, which shifts hues.)
 
@@ -646,7 +712,12 @@ units, 2–10 px. 4,000 particles per view.
   - decluttering (integration review, 2026-09-28): after placing, labels are taken greedily by kind (station,
     scenario, road, park, water, POI) and, within a kind, nearest first; a label whose box would overlap an
     already placed one (plus a 3 px gap) is hidden for that frame. This removed the overlaps of the air view,
-    e.g. "INA Zagreb-Miramarska" over "Park Adolfa Mošinskog".
+    e.g. "INA Zagreb-Miramarska" over "Park Adolfa Mošinskog";
+  - edges and cards (UI review, 2026-09-28): a label whose anchor is on screen but whose box would cross the
+    view's left, right or top edge is shifted back inside (4 px margin, at most half its width), so "Park mira i
+    prijateljstva" is no longer cut at the edge of the left view; a label whose anchor is off screen is hidden.
+    `update(cam, w, h, blockers)` takes rectangles in view pixels (main.js passes the view card, the numbers card
+    and the north arrow); a label that would sit under one is hidden.
 
 ---
 
@@ -677,13 +748,14 @@ Target: 60 fps on a laptop GPU with the whole neighbourhood and two views.
 
 ## 8. Validation
 
-**In-page tests.** `python3 tests/browser/run_selftest.py --only scene` (SwiftShader) runs 15 tests
-in `src/js/tests/scene.test.js`. All pass with the current data:
+**In-page tests.** `python3 tests/browser/run_selftest.py --only scene` (SwiftShader) runs 18 tests
+in `src/js/tests/scene.test.js`. All pass with the current data (re-run in the UI review of 2026-09-28, after the
+env.json rebuild to 4,275 buildings; the numbers in the first rows are from the first build):
 
 | Test | Result |
 |---|---|
 | prisms match ENV.buildings | 4,309 → 4,307 prisms (2 invalid, 0 container) |
-| LoD1 mesh: no NaN, winding | 74,175 triangles, 0 wound against their normal |
+| LoD1 mesh: no NaN, winding | 74,175 triangles, 0 wound against their normal (73,693 after the rebuild; slivers whose corners are collinear within float32 precision, \|a×b\| < 10⁻⁵ · longest edge², are skipped: one 0.0001 m² sliver of `zg3d:63045`, 640 m out, has no meaningful orientation) |
 | cityGeometry for every scenario | today 4,307 prisms / 1,828 trees · trees +365 trees · block +4 prisms, −9 trees · tower +1 (80 m) · notrees 0 trees · custom +1 |
 | container never in the flow | no prism contains the inlet in any scenario; filter recognises the ring and the OSM id |
 | scenario volumes clear | 0 overlaps with existing buildings; ≥ 8 m from the inlet; station tree pruned to 4.79 m, 5.3 m from the wall |
@@ -696,7 +768,10 @@ in `src/js/tests/scene.test.js`. All pass with the current data:
 | sun position | see §2.2 |
 | ribbonGeometry | all up-facing; area 1,660 ± 30 m² for an L of 160 m × 10 m |
 | ConcSlice | solid cells transparent, edge fade, rebuild only on change, grid-field adapter |
-| Particles | release only from groups with weight, downwind drift |
+| increment scale | every `INC_SCALES` entry: linear ticks 0 … hi, opacity non-decreasing and the lightness seen over the ground non-increasing from lo to 1.2 hi, transparent at lo/2 and for NaN, a fade between lo/2 and lo, saturation above hi, `concBand` on the scale; the legend has one tick per value, a labelled ramp, names the background; the compact legend has no note |
+| labels inside their view | a long label anchored at 97 % of the width is shifted inside (4 px margin) and shown; a label anchored off screen is hidden; a label under a card rectangle is hidden |
+| ConcSlice setDim | a stale slice is drawn at 45 % opacity and restored |
+| Particles | release only from groups with weight, downwind drift (median displacement, because a particle that leaves the domain respawns hundreds of metres away) |
 
 **Visual checks.** Screenshots of a scratch harness (the scene files plus a minimal boot, outside the
 repo) and of the full app (`tests/browser/smoke.py`) were compared with the reference's look. They
@@ -712,10 +787,22 @@ covered:
 Two changes came out of them: the lower slice opacity for bands 1–2, and the facade pruning of the
 station tree in the block scenario.
 
+**UI review (2026-09-28).** The full app, headless on the 10 m grid (`?grid=coarse&live=0`, NE 1.7 m/s), EN and HR,
+1440 × 900 and 390 × 844, light and dark: with the total the slice was a near-uniform veil (above); with the local
+increment on the linear scale the roads and the plumes to their downwind side stand out and the rest of the city
+stays readable. The slice texture matches `ScalarField.sample()` at each texel's world position, and for the NE wind
+the NOₓ increment 20–40 m south of Vukovarska is 3–5× the north side (downwind side check). No 3D label leaves its
+view any more (before: "Park mira i prijateljstva" cut at the edge of the left view, and road names cut at the top).
+
 ---
 
 ## 9. Limitations
 
+- **Legend colours are pre-blended with the ground** (`#d6d4cb`). Over asphalt, roofs or grass the same cell looks a
+  little different from its legend swatch; the numbers in the legend, not the swatch, carry the value.
+- **One scale for the increment map.** `INC_SCALES` is fixed per pollutant (§6.1); in calm, stable hours much of the
+  map saturates at the darkest stop. That is the honest reading (it is more polluted), but gradients inside the
+  saturated area are not shown; the *total* map or a higher slice then helps.
 - **Hypothetical scenarios.** The scenario volumes are illustrations placed on real open ground. They
   are not planning proposals, and the block and tower have no internal detail: they are LoD1 boxes,
   like everything the flow sees.
@@ -780,4 +867,7 @@ Changing the data needs no code change:
 | light elevation floor | 15° | §2.2 | scene.js |
 | `vis_PALETTES`, `vis_BAND_ALPHA` | §6.1 | validator; visual check | visuals.js |
 | `vis_SLICE_FADE_M` | 80 m | outflow sponge (critic §4.4) | visuals.js |
+| `vis_INC_HI`, `vis_INC_STOPS`, `vis_INC_ALPHA` | §6.1 table; 7 violet stops; opacity 0.12–0.90 | headless probe of the field; validator | visuals.js |
+| `vis_SLICE_DIM` | 0.45 | a stale slice reads as "old", like the grey numbers | visuals.js |
+| `vis_LABEL_EDGE` | 4 px | labels kept inside their view | visuals.js |
 | `vis_PARTICLES` | 4,000, ×6, 15–30 s, 1.6 m, û\* 0.162, 8 m | §6.3 | visuals.js |

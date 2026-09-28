@@ -418,6 +418,12 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
   - `class WindStreaks` (port)
   - `class LabelLayer` (port)
   - `concColor(value, scale, out)` · `CONC_SCALES[pollutant]` (break points from EAQI bands) · `legendHTML(pollutant)`
+- As implemented after the UI review (2026-09-28): visuals.js also exports `INC_SCALES` (linear 0…max scales for the
+  default "local sources" slice: NO₂ 80, NOx 300, PM₁₀ 30, PM₂.₅ 20 µg/m³, CO 0.3 mg/m³, benzene 2 µg/m³), `concT`,
+  `legendHTML(p, {what: 'inc' | 'total', bg, h, compact})` and `ConcSlice.setDim(on)` (a paler slice while a new field
+  computes). `LabelLayer.update` takes an optional `blockers` argument (screen rectangles of the cards and the north
+  arrow). main.js adds `state.sliceWhat = 'inc' | 'total'`. charts.js time axes choose a tick step of 3 h … 1 year
+  from the plot width, so labels stay at least 44 viewBox px apart.
 - As implemented (docs/12-rendering.md): city.js also exports `cityView(id)` (call before drawing each view),
   `setXray(on)`, `async setLod2(on) → bool`, `decodeLod2(src)`, `buildingLegendHTML(mode)`, `CITY_SOURCE_GROUPS`;
   `buildCity()` also returns `treesRoot` and `overlays.sources`; `cityGeometry().trees[]` carry the crown base `cb`

@@ -44,7 +44,11 @@ test('scene: LoD1 mesh has no NaN and outward/upward winding', () => {
     for (let i = 0; i < pos.length; i += 9) {
       a.fromArray(pos, i); b.fromArray(pos, i + 3); c.fromArray(pos, i + 6);
       n.subVectors(b, a).cross(c.clone().sub(a));
-      if (n.lengthSq() < 1e-8) continue;               // zero-width keyhole bridges
+      // zero-width keyhole bridges, and slivers whose three corners are collinear within float32 precision
+      // (|a×b| < 1e-5 · longest edge², i.e. an angle below ~0.0006°): their winding is numerical noise, not
+      // geometry (UI review 2026-09-28: one 0.0001 m² sliver of zg3d:63045, 640 m out, after the env rebuild)
+      const e2 = Math.max(a.distanceToSquared(b), b.distanceToSquared(c), c.distanceToSquared(a));
+      if (n.lengthSq() < 1e-8 || n.length() < 1e-5 * e2) continue;
       tris++;
       if (n.x * nrm[i] + n.y * nrm[i + 1] + n.z * nrm[i + 2] <= 0) bad++;
     }
@@ -264,6 +268,76 @@ test('scene: concColor is monotonic for every pollutant', async () => {
   return { pollutants: Object.keys(CONC_SCALES), no2: CONC_SCALES.no2.breaks, source: CONC_SCALES.no2.source };
 });
 
+test('scene: increment scale is continuous, monotone and fades out below its range', () => {
+  const g = vis_hexBytes(vis_GROUND), out = new Uint8ClampedArray(4);
+  // what the eye sees: the colour laid over the ground at its opacity
+  const seen = (c) => [0, 1, 2].map((k) => c[k] * (c[3] / 255) + g[k] * (1 - c[3] / 255));
+  for (const [p, s] of Object.entries(INC_SCALES)) {
+    assert(s.kind === 'lin' && Math.abs(s.lo - s.hi / 40) < 1e-12 && s.ticks[0] === 0 && s.ticks[s.ticks.length - 1] === s.hi && s.ticks.length >= 4 && s.ticks.length <= 6,
+      `${p}: range and ticks ${s.ticks}`);
+    let lastA = -1, lastL = Infinity;
+    for (let k = 0; k <= 300; k++) {
+      const v = s.lo + (s.hi * 1.2 - s.lo) * (k / 300);
+      concColor(v, s, out);
+      const L = sct_oklabL(...seen(out));
+      assert(out[3] >= lastA, `${p}: opacity falls at ${v}`);
+      assert(L <= lastL + 1e-6, `${p}: seen lightness rises at ${v}`);
+      lastA = out[3]; lastL = L;
+    }
+    concColor(s.lo / 2, s, out); assert(out[3] === 0, `${p}: lo/2 must be transparent`);
+    concColor(s.lo * 0.75, s, out); const aMid = out[3];
+    concColor(s.lo, s, out); assert(aMid > 0 && aMid < out[3], `${p}: fades in between lo/2 and lo`);
+    concColor(NaN, s, out); assert(out[3] === 0, `${p}: NaN transparent`);
+    const top = Array.from(concColor(s.hi, s, new Uint8ClampedArray(4))), over = Array.from(concColor(s.hi * 10, s, new Uint8ClampedArray(4)));
+    assert(top.join() === over.join(), `${p}: saturates above hi`);
+    assert(concBand(s.lo * 0.9, s) === 0 && concBand(s.lo, s) === 1 && concBand(s.hi, s) === s.ticks.length, `${p}: concBand on the increment scale`);
+    const html = legendHTML(p, { what: 'inc', bg: '20 µg/m³', h: 4 });
+    assert((html.match(/class="legend-tick[ "]/g) || []).length === s.ticks.length && /legend-ramp" role="img" aria-label="[^"]+"/.test(html), `${p}: legend ticks and ramp label`);
+    assert(html.includes('20 µg/m³') && html.includes('data-what="inc"'), `${p}: legend names the background`);
+    assert(!legendHTML(p, { what: 'inc', compact: true }).includes('legend-note'), `${p}: compact legend has no note`);
+  }
+  assert(legendHTML('no2', { what: 'total', compact: true }).includes('legend-cells'), 'compact total legend: band strip');
+  return { no2: INC_SCALES.no2.ticks, nox: INC_SCALES.nox.ticks };
+});
+
+test('scene: labels stay inside their view and yield to the cards', () => {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:absolute;left:0;top:0;width:400px;height:300px;visibility:hidden';
+  document.body.appendChild(el);
+  try {
+    const L = new LabelLayer(el);
+    const cam = new THREE.PerspectiveCamera(40, 400 / 300, 1, 5000);
+    cam.position.set(0, 400, 0.01); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    // anchors placed by screen position (NDC → world), so the test does not depend on the camera's orientation
+    const at = (x, y) => new THREE.Vector3(x, y, 0.9).unproject(cam);
+    const edge = L.add('Park mira i prijateljstva (a long name)', at(0.94, -0.5), 'park');   // (388, 225) px of 400 × 300
+    const off = L.add('Off screen', at(1.2, 0), 'park');
+    const under = L.add('Under a card', at(-0.5, 0.5), 'poi');                            // (100, 75) px
+    // the card over the upper-left quarter of the view
+    L.update(cam, 400, 300, [[0, 0, 200, 150]]);
+    const x = +/translate\(([-\d.]+)px/.exec(edge.e.style.transform)[1], w = edge.e.offsetWidth;
+    assert(w > 60, `label measured (${w} px)`);
+    assert(x + w / 2 <= 400 - vis_LABEL_EDGE + 0.5 && x - w / 2 >= 0, `edge label inside the view: centre ${x}, width ${w}`);
+    assert(edge.e.style.visibility !== 'hidden' && edge.e.style.display !== 'none', 'edge label shown');
+    assert(off.e.style.display === 'none', 'label with its anchor off screen is hidden');
+    assert(under.e.style.visibility === 'hidden', 'label under a card is hidden');
+    return { x: +x.toFixed(1), w };
+  } finally { el.remove(); }
+});
+
+test('scene: ConcSlice setDim draws a stale slice paler', () => {
+  const g = new THREE.Group(), cs = new ConcSlice(g);
+  const gf = ConcSlice.gridField({ x0: 0, z0: 0, dx: 10, nx: 4, nz: 4 }, new Float32Array(64).fill(1), 4);
+  cs.update(gf, () => 30, 4, true, INC_SCALES.no2);
+  assert(cs.mesh.material.opacity === 1, 'full opacity by default');
+  cs.setDim(true);
+  assert(cs.mesh.material.opacity < 0.6, 'dimmed');
+  cs.setDim(false);
+  assert(cs.mesh.material.opacity === 1, 'restored');
+  assert(cs.data[3 + 4 * 5] > 0, 'increment scale colours the grid');
+  cs.dispose();
+});
+
 test('scene: sun position and daylight', () => {
   // June solstice, local solar noon at 15.97 E ≈ 10:58 UTC: elevation 90 − 45.80 + 23.44 = 67.6°, azimuth 180°.
   const s = sc_sunPosition(new Date('2026-06-21T10:58:00Z'), SITE.station.lat, SITE.station.lon);
@@ -339,8 +413,9 @@ test('scene: Particles release by emission weight and move with the wind', () =>
   if (!REDUCED_MOTION) {
     for (let k = 0; k < 10; k++) P.update(0.05, wind, 2, true);
     const x1 = Array.from(P.p.filter((_, i) => i % 3 === 0));
-    const dxMean = x1.reduce((s, x, i) => s + (x - x0[i]), 0) / x1.length;
-    assert(dxMean > 0.5, `particles drift downwind (mean dx ${dxMean.toFixed(2)} m)`);
+    // the median, because a particle that dies or leaves the domain respawns at a source hundreds of metres away
+    const dx = x1.map((x, i) => x - x0[i]).sort((u, v) => u - v), dxMed = dx[dx.length >> 1];
+    assert(dxMed > 0.5, `particles drift downwind (median dx ${dxMed.toFixed(2)} m)`);
   }
   P.update(0.016, null, 2, true);
   assert(!P.points.visible, 'no field: hidden');

@@ -65,6 +65,8 @@ said where it matters in the chapters. Here it is in one place, ranked by how mu
 
 - **ISZZ validation lags.** 2026 data are raw (not yet validated). Validated data typically change hourly NOx by
   3–26 µg/m³ on average (docs/01 §10).
+- **Raw CO in 2026 drifts.** It is reported to 0.1 mg/m³ and its summer monthly means are slightly negative
+  (analyser zero drift, to be corrected by DHMZ's validation). Treat live CO values as indicative.
 - **The station vane is not reliable for northerly winds.** No directions are recorded between 282° and 16°, and
   28–47 % of strong northerly hours are reported from the opposite half-circle at three DHMZ stations. This is most
   likely a processing artefact (critic §1.5). The station wind is shown, never used as input, and validated only for

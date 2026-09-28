@@ -9,7 +9,7 @@ the neighbourhood **as it is**. On the right is the same neighbourhood **with a 
 new building, a car-free Miramarska, a low-emission zone, electric buses, less traffic. Set the wind, the hour and the
 traffic, and see where NO₂ builds up.
 
-![Today vs. scenario: the neighbourhood of ZAGREB-1 with the modelled NO₂ at 4 m](docs/img/screenshot.png)
+![Today vs. scenario: the neighbourhood of ZAGREB-1 with the modelled NO₂ at 4 m](docs/img/screenshot.jpg)
 
 It is the ZAGREB-1 counterpart of [maksimir-pod-kisom](https://github.com/ivanrezic/maksimir-pod-kisom), which compares
 today's and tomorrow's Maksimir stadium in wind and rain. The GPU wind tunnel is adapted from that project.

@@ -186,6 +186,12 @@ body {
   text-wrap: balance;
 }
 .view-head p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--scene-card-ink-2); }
+/* The slice legend on the map: in the card of the first visible view only (both views share one scale). */
+.view-legend { margin-top: 9px; }
+.views:not(.single) #view-b .view-legend { display: none; }
+.view-legend .legend { margin: 0; gap: 2px; }
+.view-legend .legend-title { margin: 0; font-size: 11.5px; font-weight: 650; color: var(--scene-card-ink); }
+.view-legend .legend-ticks span, .view-legend .legend-bands { color: var(--scene-card-ink-2); }
 
 /* What the view's numbers still wait for: the tunnel's progress, the queue, or nothing. The bar runs along the
    card's bottom edge (reference pattern). */
@@ -343,10 +349,70 @@ body {
 .title-block p { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 42ch; }
 .title-block .mode-line { margin-top: 10px; font-size: 12.5px; color: var(--ink); }
 .mode-line b { font-weight: 700; }
+/* The model status: one quiet line; amber rule when only the approximate model runs. */
+.title-block .model-line { margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+.title-block .model-line.warn { padding-left: 8px; border-left: 3px solid var(--warn-rule); }
+.linklike {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--modri);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.linklike:hover { text-decoration-thickness: 2px; }
 .segmented.lang { flex: none; margin-top: 4px; }
 .segmented.lang button { padding: 4px 8px; font-size: 12px; font-weight: 650; }
 
 .block { display: flex; flex-direction: column; gap: 14px; }
+fieldset.plain { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+fieldset.plain > legend { padding: 0; margin-bottom: 2px; }
+.now-notes { display: flex; flex-direction: column; gap: 6px; }
+
+/* Collapsible groups: the summary reads like a section heading, with a chevron and a one-line list of contents. */
+details.group { border-top: 1px solid var(--rule); }
+details.group + details.group { margin-top: -26px; }   /* the panel's gap: consecutive groups read as one list */
+details.group > summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  padding: 11px 0 10px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink);
+}
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::after {
+  content: "";
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-right: 2px solid var(--ink-2);
+  border-bottom: 2px solid var(--ink-2);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.15s;
+}
+details.group[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+details.group > summary:hover h2 { color: var(--modri); }
+details.group > summary h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  font-variation-settings: "wdth" 112;
+  letter-spacing: 0.02em;
+}
+details.group > summary .group-sub { grid-column: 1; font-size: 12px; color: var(--ink-2); }
+details.group[open] > summary { margin-bottom: 4px; border-bottom: 1px solid var(--rule); }
+.group-body { display: flex; flex-direction: column; gap: 14px; padding: 6px 0 12px; }
+.group-body > .sub { display: flex; flex-direction: column; gap: 12px; }
+.group-body > .sub + .sub { padding-top: 14px; border-top: 1px dashed var(--rule-2); }
+.group-body h3 { margin: 0; font-size: 13.5px; font-weight: 700; font-variation-settings: "wdth" 110; }
 .block h2 {
   margin: 0;
   padding-bottom: 6px;
@@ -360,6 +426,8 @@ body {
 
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field.stack { gap: 12px; }
+.field.stack select { align-self: flex-start; }
 .field-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .field-row.small { font-size: 12.5px; align-items: center; }
 .field-row.small label { font-weight: 450; color: var(--ink-2); }
@@ -395,7 +463,7 @@ button { font: inherit; color: inherit; }
   border-color: var(--modri);
   color: var(--modri-ink);
 }
-.presets button:disabled, .segmented button:disabled { opacity: 0.45; cursor: not-allowed; }
+.presets button:disabled, .segmented button:disabled, .action:disabled[title], .action.ghost:disabled[title] { opacity: 0.45; cursor: not-allowed; }
 
 .segmented { display: flex; }
 .segmented button { flex: 1; min-width: 0; white-space: nowrap; }
@@ -566,6 +634,9 @@ input[type="range"]::-moz-range-thumb {
 .compare.metrics td { width: auto; padding-left: 8px; }
 .compare.metrics tbody th small { display: block; font-size: 11px; color: var(--ink-2); }
 .compare .pass::before { content: "✓ "; color: var(--ok); }
+/* Year columns of the exceedance table stay narrow so the row labels keep their width on phones. */
+#exceed-table td, #exceed-table thead th { width: 2.8em; padding-left: 6px; }
+#exceed-table tbody th { font-size: 12.5px; line-height: 1.35; }
 .compare .fail::before { content: "✗ "; color: var(--err-ink); }
 .data-table th, .data-table td { font-size: 12px; padding: 4px 4px; }
 .data-table td { width: auto; font-weight: 500; }
@@ -589,6 +660,17 @@ input[type="range"]::-moz-range-thumb {
 .legend-name { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .legend .legend-note { margin: 2px 0 0; font-size: 11.5px; color: var(--ink-2); }
 .legend-buildings ul { grid-template-columns: 1fr 1fr 1fr; }
+/* Continuous ramp (local increment) and the compact band strip: ticks sit at their value's position. */
+.legend-ramp { height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.legend-cells { display: flex; height: 10px; border-radius: 2px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.legend-cell { flex: 1; }
+.legend-ticks { position: relative; height: 14px; font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.legend-ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.legend-ticks span.first { transform: none; }
+.legend-ticks span.last { transform: translateX(-100%); }
+.legend-bands { display: flex; justify-content: space-between; margin: 0; font-size: 11px; color: var(--ink-2); }
+.legend.compact .legend-ramp, .legend.compact .legend-cells { height: 8px; }
+.legend.compact .legend-ticks { height: 13px; font-size: 10.5px; line-height: 13px; }
 #bcol-hint .legend { margin-top: 0; }
 
 /* ---------------------------------------------------------------- charts (charts.js) */
@@ -705,7 +787,9 @@ details[open] summary { margin-bottom: 4px; }
   .view-head { top: 10px; left: 10px; padding: 7px 10px 8px; max-width: calc(100% - 20px); }
   .view-busy { margin-top: 5px; padding-bottom: 4px; font-size: 12px; }
   .view-head h2 { font-size: 18px; }
-  .view-head p { display: none; }
+  .view-head > p { display: none; }
+  .view-legend { margin-top: 5px; }
+  .view-legend .legend-title { font-size: 11px; }
   .view-stats { left: 10px; bottom: 10px; }
   .view-stats > div { min-width: 0; padding: 6px 10px 7px; }
   .view-stats dd.big { font-size: 21px; }
@@ -725,6 +809,7 @@ details[open] summary { margin-bottom: 4px; }
   * { scroll-behavior: auto !important; }
   .view-bar.wait i { width: 100%; opacity: 0.35; animation: none; }
   .view-stats dd, .compare td { transition: none; }
+  details.group > summary::after { transition: none; }
 }
 
 @media (forced-colors: active) {

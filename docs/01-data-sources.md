@@ -617,6 +617,13 @@ from git: the tools would then re-download on each run (about 25 min) and the pa
    the UI must say which one it shows.
 3. **2026 is raw.** Raw values differ from the later validated ones by a few µg/m³ (NOx up to ~26 µg/m³ on average,
    §2.6). The weekly probe will switch 2026 to validated automatically once DHMZ publishes it (expected in 2027).
+   **Raw CO in 2026 shows analyser zero drift.** It is reported to 0.1 mg/m³ only, and its monthly means fall to
+   −0.07 and −0.09 mg/m³ in July and August 2026 (June 0.03), with 33–75 % of the hours at exactly 0. Validated CO in
+   2025 was 0.09–0.47 mg/m³ by month (integration check, 2026-09-28). The page shows raw CO as published. The
+   calibration uses validated 2025 data only, so it is not affected.
+3b. **Station meteorology is range-checked** in `build_measurements.py` (`PLAUSIBLE`: wind 0–40 m/s, direction 0–360°,
+   T −40…50 °C, RH 0–100.5 %). Three raw wind spikes of 57, 127.6 and 219.5 m/s (May–June 2024) are dropped, and
+   the count is in `meta.sources.plausibility`. Pollutants are not filtered.
 4. The **annual threshold** is 75 % (architecture §4.2), looser than the AAQD's 85 %. `coverage_by_year` makes this
    visible. Benzene 2023 (80.4 %) and 2025 (84.9 %) fall into that band.
 5. **Rose sectors** use the IFS cell 3.9 km west of the station. Near-station channelling is not in IFS, and the

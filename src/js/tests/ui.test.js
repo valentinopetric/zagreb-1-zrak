@@ -131,6 +131,71 @@ test('ui.live iszz: window, 429 back-off, pacing, cache', async () => {
   return { calls: calls.length };
 });
 
+test('ui.live iszz: a refusal without CORS headers (TypeError) is retried like a 429', async () => {
+  // ISZZ sends its 429 WITHOUT Access-Control-Allow-Origin (checked with curl and in Chromium, 2026-09-28), so in a
+  // browser fetch() rejects with TypeError "Failed to fetch" (net::ERR_FAILED) and the status is never visible.
+  // Four refusals in a row exceed the generic network budget (1 + 2 + 4 s) but must still end in data.
+  const calls = [];
+  Live._setFetch(async () => {
+    calls.push(performance.now());
+    if (calls.length <= 4) throw new TypeError('Failed to fetch');
+    return { status: 200, ok: true, json: async () => [{ vrijednost: 5, vrijeme: Date.UTC(2026, 8, 26, 0) }] };
+  });
+  try {
+    const rows = await Live.iszz(155, 'so2', Date.UTC(2026, 8, 26, 0), Date.UTC(2026, 8, 26, 0), 0);
+    assert(rows.length === 1 && rows[0].v === 5, `rows after four refusals: ${JSON.stringify(rows)}`);
+    assert(calls.length === 5, `four refusals + one success, got ${calls.length}`);
+    const gaps = calls.slice(1).map((c, i) => c - calls[i]);
+    assert(gaps.every((g) => g >= 1000 - 20 && g < 3500), `1–2 s jittered retries, got ${gaps.map(Math.round)}`);
+  } finally {
+    Live._setFetch((...a) => fetch(...a));
+  }
+  return { calls: calls.length };
+});
+
+test('ui.live iszz: a range over chunk_days is split under the cap with no duplicate hours', async () => {
+  // Fake export: whole local days D1..D2 give the hour-ending slots (D1 00:00, (D2+1) 00:00] (iszz-api §4.3).
+  const sizes = [];
+  const day = (s) => s.split('.').map(Number);   // dd.MM.yyyy → [d, m, y]
+  Live._setFetch(async (url) => {
+    const q = new URL(url).searchParams;
+    const [d1, m1, y1] = day(q.get('vrijemeOd')), [d2, m2, y2] = day(q.get('vrijemeDo'));
+    const rows = [];
+    for (let tt = ZgTime.toUTC(y1, m1, d1, 0) + 3600e3; tt <= ZgTime.toUTC(y2, m2, d2, 24); tt += 3600e3) rows.push({ vrijednost: 1, vrijeme: tt });
+    sizes.push(rows.length);
+    return { status: 200, ok: true, json: async () => rows };
+  });
+  try {
+    const from = Date.UTC(2026, 6, 1, 5), to = from + 45 * 24 * 3600e3;   // 45 days → two requests
+    const rows = await Live.iszz(155, 'no2', from, to, 1);
+    assert(sizes.length === 2 && sizes.every((k) => k < SITE.iszz.max_rows), `requests ${sizes}`);
+    assert(new Set(rows.map((r) => r.t)).size === rows.length, `duplicate hours: ${rows.length - new Set(rows.map((r) => r.t)).size}`);
+    assert(rows.length === (to - from) / 3600e3 + 1 && rows[0].t === from && rows[rows.length - 1].t === to, `rows ${rows.length}`);
+    assert(rows.every((r, i) => i === 0 || r.t > rows[i - 1].t), 'time-ordered');
+  } finally {
+    Live._setFetch((...a) => fetch(...a));
+  }
+  return { requests: sizes };
+});
+
+test('ui.zgtime: parts() agrees with Intl Europe/Zagreb 2023–2027', () => {
+  const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Zagreb', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hourCycle: 'h23', weekday: 'short' });
+  const DOW = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  let n = 0;
+  for (let tt = Date.UTC(2023, 0, 1); tt < Date.UTC(2028, 0, 1); tt += 3600e3) {
+    const p = ZgTime.parts(tt), q = {};
+    for (const { type, value } of fmt.formatToParts(tt)) q[type] = value;
+    const ok = p.y === +q.year && p.mo === +q.month && p.d === +q.day && p.h === +q.hour && p.dow === DOW[q.weekday];
+    if (!ok) throw new Error(`${new Date(tt).toISOString()}: ZgTime ${JSON.stringify(p)} vs Intl ${JSON.stringify(q)}`);
+    // round trip local → UTC for every hour that exists and is not the repeated autumn hour
+    if (ZgTime.offset(tt) === ZgTime.offset(tt - 3600e3) && ZgTime.offset(tt) === ZgTime.offset(tt + 3600e3)) {
+      assert(ZgTime.toUTC(p.y, p.mo, p.d, p.h) === tt, `toUTC round trip at ${new Date(tt).toISOString()}`);
+    }
+    n++;
+  }
+  return { hours: n };
+});
+
 // ---------------------------------------------------------------- charts.js
 test('ui.charts lineChart: valid SVG with aria-label, band, limits and a table', () => {
   const el = document.createElement('div');
@@ -293,8 +358,39 @@ test('ui.i18n completeness: every ui/chart/data key in hr and en, every markup k
   return { ui: Object.keys(UI_STRINGS.hr).length, chart: Object.keys(chart_STRINGS.hr).length, data: Object.keys(data_STRINGS.hr).length, markup: used.size };
 });
 
+test('ui.time labels: explicit hour spans, midnight and DST', () => {
+  assert(ui_span(ZgTime.toUTC(2026, 9, 28, 9)).includes('08–09 h'), ui_span(ZgTime.toUTC(2026, 9, 28, 9)));
+  const mid = ui_span(ZgTime.toUTC(2026, 9, 27, 24));
+  assert(mid.includes('23–24 h') && /27/.test(mid), `hour ending 24:00 belongs to the 27th: ${mid}`);
+  // 29 Mar 2026: the hour 00:00Z–01:00Z starts at 01:00 CET and ends at 03:00 CEST
+  assert(ui_span(Date.UTC(2026, 2, 29, 1)).includes('01–03 h'), `spring switch: ${ui_span(Date.UTC(2026, 2, 29, 1))}`);
+  assert(ui_endHour(Date.UTC(2026, 2, 29, 1)) === 3 && ui_endHour(ZgTime.toUTC(2026, 9, 27, 24)) === 24, 'end hours');
+  // the hour slider (local hour start + 1) maps back to the same hour on a switch day
+  assert(ZgTime.toUTC(2026, 3, 29, 2 - 1) + UI_H === Date.UTC(2026, 2, 29, 1), 'slider 2 on 29 Mar = the hour 01–03 h');
+  assert(ui_gridLabel('60x60x16@10m') === '10 m' && ui_gridLabel('120x120x32@5m') === '5 m' && ui_gridLabel(null) === '?', 'grid labels');
+  assert(state.sliceWhat === 'inc', 'the map shows the local increment by default');
+});
+
 test('ui.boot guard: the app does not boot under SELFTEST', () => {
   assert(SELFTEST, 'this runs under ?selftest');
   assert(window.__z1 && window.__z1.ready === false && window.__z1.fields === 0, 'window.__z1 exists but the app is not booted');
   assert(typeof state === 'object' && state.pollutant === 'no2' && state.from === 45 && state.u10 === 1.7, 'default state = critic §4.5 NE preset');
+});
+
+
+// x-axis ticks never crowd: at least 44 px between labels at any width and span (integration review 2026-09-28:
+// '18 29 Sep 06' overlapped on the 327 px panel).
+test('ui.charts time ticks keep 44 px apart', async () => {
+  const el = document.createElement('div');
+  const t0 = Date.UTC(2026, 8, 25, 0), mk = (h) => Array.from({ length: h }, (_, i) => ({ t: t0 + i * 3600e3, v: 10 + (i % 24) }));
+  for (const [hours, width] of [[72, 327], [72, 900], [24 * 14, 327], [24 * 400, 327]]) {
+    el.style.width = `${width}px`;
+    document.body.appendChild(el);
+    lineChart(el, { series: [{ label: 'x', points: mk(hours) }], unit: 'µg/m³', label: 'test', width });
+    // The SVG has a fixed viewBox that scales as a whole (labels included), so spacing is checked in viewBox units.
+    const xs = Array.from(el.querySelectorAll('text.xtick')).map((n) => Number(n.getAttribute('x'))).sort((p, q) => p - q);
+    assert(xs.length >= 2, `${hours} h at ${width} px: ${xs.length} ticks`);
+    for (let i = 1; i < xs.length; i++) assert(xs[i] - xs[i - 1] >= 43, `${hours} h at ${width} px: ticks ${Math.round(xs[i] - xs[i - 1])} px apart`);
+    el.remove();
+  }
 });

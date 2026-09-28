@@ -59,6 +59,37 @@ const vis_PALETTES = {
 // of the domain sits there; a heavier veil hid the streets in the visual check (docs/12-rendering.md §7).
 const vis_BAND_ALPHA = [56, 96, 140, 180, 208, 228];
 
+/*
+ * Local-increment scales INC_SCALES[p] (the default map since the UI review of 2026-09-28,
+ * docs/12-rendering.md §6.1). The total at a point is background + local increment, and the
+ * background is one number for the whole domain (ZAGREB-4 at that hour). With the EAQI bands of the
+ * total, a NO2 background of ~20 µg/m³ put 95 % of the domain into one or two bands, so the street-
+ * scale structure the 3D model computes was invisible. The increment alone is what varies in space.
+ *   - Continuous and linear from zero to hi per pollutant, so twice as dark means about twice as
+ *     much and the colour range sits where the street-scale gradients are (near the roads). A log scale
+ *     was tried first: it spent half the range on the far field (1–10 µg/m³) and squeezed the near-road
+ *     values (30–80 µg/m³ NO2) into its top fifth, so the map still read as a uniform veil.
+ *     hi is about the 99th percentile of the modelled field in the NE default case, rounded (headless
+ *     probe on the 10 m grid, 2026-09-28: NO2 increment median 19.5, p99 70, max 79 µg/m³; NOx median 34,
+ *     p99 264; PM10 median 3.2, p99 24; PM2.5 median 2.2, p99 17; CO median 0.034, p99 0.26 mg/m³;
+ *     benzene median 0.25, p99 1.9 µg/m³). The scale is fixed (not stretched to each field), so a windy
+ *     hour looks cleaner than a calm one.
+ *   - Below lo = hi / 40 the cell fades out (transparent at lo / 2): the far field is not coloured.
+ *     At and above hi the colour stays at the darkest stop. The legend says both.
+ *   - Colour: one violet hue (OKLCH h = 310°, the hue of the 'cb' band ramp, used nowhere else in the
+ *     scene), lightness 0.81 → 0.29 in equal steps; opacity 0.12 → 0.90 with the same t, so low
+ *     values recede toward the ground and the blended lightness falls monotonically (every stop is
+ *     darker than the ground #d6d4cb). Checked with the dataviz validator (--ordinal): monotone L,
+ *     adjacent ΔL ≥ 0.06, single hue (spread 1°). The light end sits below 2:1 on the ground by
+ *     design (a continuous ramp's near-zero end recedes; dataviz palette.md "Sequential hue").
+ */
+const vis_INC_HI = { no2: 80, nox: 300, pm10: 30, pm25: 20, co: 0.3, c6h6: 2 };
+const vis_INC_STOPS = ['#d8abfa', '#c780f7', '#aa64d9', '#8e48bb', '#732a9d', '#5b1081', '#3f085c'];
+const vis_INC_ALPHA = [0.12, 0.9];
+// The ground colour of the 3D scene (scene.js M.ground): legends pre-blend the increment ramp with it
+// at each step's opacity, so the legend shows what the eye sees on the map.
+const vis_GROUND = '#d6d4cb';
+
 I18N.add({
   hr: {
     'scene.band.1': 'Dobro', 'scene.band.2': 'Prihvatljivo', 'scene.band.3': 'Umjereno',
@@ -67,6 +98,14 @@ I18N.add({
     'scene.legend.limit': 'nema europskog indeksa; razredi prema graničnim vrijednostima',
     'scene.legend.range': 'nema europskog indeksa ni zdravstvene granice; razredi obuhvaćaju izmjerene vrijednosti na postaji',
     'scene.legend.over': '> {lo}',
+    'scene.legend.inc.title': '{p} od lokalnih izvora · {unit} · {h} m iznad tla',
+    'scene.legend.total.title': '{p} ukupno (pozadina + lokalni izvori) · {unit} · {h} m iznad tla',
+    'scene.legend.inc.short': '{p} od lokalnih izvora, {unit}',
+    'scene.legend.total.short': '{p} ukupno, {unit}',
+    'scene.legend.inc.note': 'Model: doprinos prometa i kućnih ložišta povrh pozadine od {bg}, koja je ista na cijeloj karti. Linearna ljestvica od nule: ispod {lo} bez boje, od {hi} naviše najtamnije.',
+    'scene.legend.inc.nobg': 'Model: doprinos prometa i kućnih ložišta, bez pozadine. Linearna ljestvica od nule: ispod {lo} bez boje, od {hi} naviše najtamnije.',
+    'scene.legend.total.note': 'Ukupno = pozadina {bg} + lokalni izvori.',
+    'scene.legend.aria': 'Ljestvica boja: od {lo} do {hi} {unit}',
     'scene.legend.particles': 'Čestice po izvoru (samo prikaz)',
     'scene.legend.particles.note': 'Čestice se puštaju razmjerno emisiji svakog izvora i nose ih izračunati vjetar i turbulencija. Ne prikazuju koncentraciju.',
     'scene.pol.c6h6': 'benzen',
@@ -78,6 +117,14 @@ I18N.add({
     'scene.legend.limit': 'no European index; bands follow the limit values',
     'scene.legend.range': 'no European index or health limit; bands span the values measured at the station',
     'scene.legend.over': '> {lo}',
+    'scene.legend.inc.title': '{p} from local sources · {unit} · {h} m above ground',
+    'scene.legend.total.title': '{p} total (background + local sources) · {unit} · {h} m above ground',
+    'scene.legend.inc.short': '{p} from local sources, {unit}',
+    'scene.legend.total.short': '{p} total, {unit}',
+    'scene.legend.inc.note': 'Model: what traffic and domestic heating add on top of a background of {bg}, which is the same all over the map. Linear scale from zero: below {lo} not coloured, darkest from {hi} up.',
+    'scene.legend.inc.nobg': 'Model: what traffic and domestic heating add, without the background. Linear scale from zero: below {lo} not coloured, darkest from {hi} up.',
+    'scene.legend.total.note': 'Total = background {bg} + local sources.',
+    'scene.legend.aria': 'Colour scale from {lo} to {hi} {unit}',
     'scene.legend.particles': 'Particles by source (display only)',
     'scene.legend.particles.note': 'Particles are released in proportion to each source’s emission and carried by the computed wind and turbulence. They do not show concentration.',
     'scene.pol.c6h6': 'benzene',
@@ -125,6 +172,43 @@ function vis_pollutantInfo(p) {
  * Values are in the pollutant's display unit (µg/m³; CO in mg/m³, architecture §2).
  */
 const CONC_SCALES = {};
+/*
+ * INC_SCALES[pollutant] = { pollutant, basis: 'increment', kind: 'lin', lo, hi, ticks: [0 … hi in 3–5 nice
+ *   steps], stops: [7 hex], lut: Uint8Array(256 × 4) colour + opacity along t, version }.
+ * t = v / hi, clamped to [0, 1]. Same display units as CONC_SCALES.
+ */
+const INC_SCALES = {};
+// Short on-map names (the panel's pollutant buttons use the same).
+function vis_shortName(p) {
+  const n = { nox: 'NOₓ', no2: 'NO₂', pm10: 'PM₁₀', pm25: 'PM₂.₅', co: 'CO', o3: 'O₃', so2: 'SO₂' }[p];
+  return n || (p === 'c6h6' ? t('scene.pol.c6h6') : p);
+}
+// Ticks 0 … hi in 3–5 equal steps of 1, 2, 2.5 or 5 × 10^k.
+function vis_linTicks(hi) {
+  const mag = 10 ** Math.floor(Math.log10(hi));
+  for (const m of [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5]) {
+    const step = m * mag, n = Math.round(hi / step);
+    if (Math.abs(n * step - hi) < 1e-9 * hi && n >= 3 && n <= 5) return Array.from({ length: n + 1 }, (_, k) => Number((k * step).toPrecision(6)));
+  }
+  return [0, hi];
+}
+// Colour and opacity of the increment ramp at t ∈ [0, 1] (linear between the stops in sRGB bytes).
+function vis_incRGBA(t, out = [0, 0, 0, 0]) {
+  const n = vis_INC_STOPS.length - 1, x = clamp(t, 0, 1) * n, i = Math.min(n - 1, Math.floor(x)), f = x - i;
+  const a = vis_hexBytes(vis_INC_STOPS[i]), b = vis_hexBytes(vis_INC_STOPS[i + 1]);
+  for (let k = 0; k < 3; k++) out[k] = Math.round(a[k] + (b[k] - a[k]) * f);
+  out[3] = Math.round(255 * lerp(vis_INC_ALPHA[0], vis_INC_ALPHA[1], clamp(t, 0, 1)));
+  return out;
+}
+function vis_buildIncScales() {
+  for (const [p, hi] of Object.entries(vis_INC_HI)) {
+    const lut = new Uint8Array(256 * 4), c = [0, 0, 0, 0];
+    for (let k = 0; k < 256; k++) { vis_incRGBA(k / 255, c); lut.set(c, k * 4); }
+    INC_SCALES[p] = { pollutant: p, basis: 'increment', kind: 'lin', lo: hi / 40, hi, ticks: vis_linTicks(hi),
+      stops: vis_INC_STOPS.slice(), lut, version: INC_SCALES[p] ? INC_SCALES[p].version + 1 : 1 };
+  }
+}
+vis_buildIncScales();
 let vis_palette = 'cb';
 function vis_buildScales() {
   for (const p of ['nox', 'no2', 'pm10', 'pm25', 'co', 'c6h6', 'o3', 'so2']) {
@@ -152,18 +236,36 @@ function setConcPalette(name) {
 }
 
 // Band 1..6 of a value (a value equal to a break point falls in the upper band); 0 for NaN.
+// For an increment scale (kind 'lin'): 0 below lo, else the number of ticks it reaches (tick 0 counts).
 function concBand(value, scale) {
   const s = typeof scale === 'string' ? CONC_SCALES[scale] : scale;
   if (!s || !Number.isFinite(value)) return 0;
+  if (s.kind === 'lin') {
+    if (value < s.lo) return 0;
+    let b = 0;
+    for (const tk of s.ticks) if (value >= tk) b++;
+    return b;
+  }
   let b = 1;
   for (const br of s.breaks) if (value >= br) b++;
   return b;
 }
 
+// Position t ∈ [0, 1] of a value on an increment scale (linear from 0 to hi, clamped).
+function concT(value, s) { return clamp(value / s.hi, 0, 1); }
+
 // Colour of a value: out = [r, g, b, a] in 0–255 (sRGB bytes, alpha per band). Returns out.
-// A non-finite value gives a fully transparent [0, 0, 0, 0].
+// A non-finite value gives a fully transparent [0, 0, 0, 0]. On an increment scale (kind 'lin') the
+// colour is continuous; below lo it fades out linearly to nothing at lo / 2.
 function concColor(value, scale, out = new Uint8ClampedArray(4)) {
   const s = typeof scale === 'string' ? CONC_SCALES[scale] : scale;
+  if (s && s.kind === 'lin') {
+    if (!Number.isFinite(value) || value <= s.lo / 2) { out[0] = out[1] = out[2] = out[3] = 0; return out; }
+    const k = Math.round(concT(value, s) * 255) * 4, L = s.lut;
+    out[0] = L[k]; out[1] = L[k + 1]; out[2] = L[k + 2];
+    out[3] = value < s.lo ? Math.round(L[k + 3] * (value / s.lo - 0.5) * 2) : L[k + 3];
+    return out;
+  }
   const b = s ? concBand(value, s) : 0;
   if (!b) { out[0] = out[1] = out[2] = out[3] = 0; return out; }
   const c = s.rgb[b - 1];
@@ -173,22 +275,78 @@ function concColor(value, scale, out = new Uint8ClampedArray(4)) {
 
 const vis_esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// Legend for one pollutant as HTML: title with unit, one row per band (swatch + range + band name for
-// EAQI pollutants), and a note saying where the bands come from. The swatch is decorative; the text
-// carries the meaning (architecture §7).
-function legendHTML(pollutant) {
+// '#rrggbb' of colour c (bytes) laid over the 3D ground at opacity a (0–255): what the eye sees on the map.
+function vis_overGround(c, a) {
+  const g = vis_hexBytes(vis_GROUND), f = a / 255;
+  return '#' + [0, 1, 2].map((k) => Math.round(c[k] * f + g[k] * (1 - f)).toString(16).padStart(2, '0')).join('');
+}
+// A number for a legend tick: as many decimals as the value needs (7.5, 0.75, 0.0075), at most four.
+function vis_fmtTick(v) {
+  let d = 0;
+  while (d < 4 && Math.abs(Math.round(v * 10 ** d) - v * 10 ** d) > 1e-6) d++;
+  return fmt(v, d);
+}
+
+/*
+ * Legend of the slice as HTML (architecture §6.3 legendHTML(pollutant), extended):
+ *   legendHTML(pollutant)                 the band legend of the total (CONC_SCALES), as before;
+ *   legendHTML(pollutant, {what, bg, h, compact})
+ *     what     'total' (bands: title, one row per band with swatch + range + band name, note) or
+ *              'inc' (the local increment, INC_SCALES: title, a continuous linear ramp with its ticks, note);
+ *     bg       the background in display units with its unit, e.g. '20.6 µg/m³', named in the note;
+ *     h        the slice height in metres, named in the title;
+ *     compact  true for the strip on the 3D view: a short title and the ramp or swatches, no note.
+ * Swatches and the ramp are pre-blended with the 3D ground at the slice's opacity, so the legend shows
+ * the colours as they appear on the map. They are decorative (aria-hidden); the text carries the
+ * meaning (architecture §7).
+ */
+function legendHTML(pollutant, opts = {}) {
+  const what = opts.what === 'inc' ? 'inc' : 'total';
+  const compact = !!opts.compact;
+  const hTxt = Number.isFinite(opts.h) ? fmt(opts.h, opts.h % 1 ? 1 : 0) : null;
+  if (what === 'inc') {
+    const s = INC_SCALES[pollutant] || INC_SCALES.no2;
+    const info = vis_pollutantInfo(s.pollutant), name = vis_shortName(s.pollutant);
+    const c = [0, 0, 0, 0], stops = [];
+    for (let k = 0; k <= 12; k++) { vis_incRGBA(k / 12, c); stops.push(`${vis_overGround(c, c[3])} ${((k / 12) * 100).toFixed(1)}%`); }
+    const ticks = s.ticks.map((v) => {
+      const p = concT(v, s) * 100, cls = p < 0.5 ? ' first' : p > 99.5 ? ' last' : '';
+      return `<span class="legend-tick${cls}" style="left:${p.toFixed(1)}%">${vis_esc(vis_fmtTick(v))}</span>`;
+    });
+    const title = compact ? t('scene.legend.inc.short', { p: name, unit: info.unit })
+      : hTxt ? t('scene.legend.inc.title', { p: name, unit: info.unit, h: hTxt }) : `${name} · ${info.unit}`;
+    const aria = t('scene.legend.aria', { lo: vis_fmtTick(s.lo), hi: vis_fmtTick(s.hi), unit: info.unit });
+    const note = compact ? '' : `<p class="legend-note">${vis_esc(t(opts.bg ? 'scene.legend.inc.note' : 'scene.legend.inc.nobg',
+      { bg: opts.bg || '', lo: `${vis_fmtTick(s.lo)} ${info.unit}`, hi: `${vis_fmtTick(s.hi)} ${info.unit}` }))}</p>`;
+    return `<div class="legend legend-conc legend-inc${compact ? ' compact' : ''}" data-pollutant="${s.pollutant}" data-what="inc">`
+      + `<p class="legend-title">${vis_esc(title)}</p>`
+      + `<div class="legend-ramp" role="img" aria-label="${vis_esc(aria)}" style="background:linear-gradient(90deg, ${stops.join(', ')})"></div>`
+      + `<div class="legend-ticks" aria-hidden="true">${ticks.join('')}</div>${note}</div>`;
+  }
   const s = CONC_SCALES[pollutant] || CONC_SCALES.no2;
   const info = vis_pollutantInfo(s.pollutant);
   const dec = s.breaks[0] < 1 ? 1 : 0;
+  const lab = (v) => fmt(v, v % 1 ? dec : 0);
+  const sw = (i) => vis_overGround(s.rgb[i], vis_BAND_ALPHA[i]);
+  if (compact) {
+    const cells = s.colors.map((_, i) => `<span class="legend-cell" style="background:${sw(i)}"></span>`);
+    const ticks = s.breaks.map((b, i) => `<span class="legend-tick" style="left:${(((i + 1) / 6) * 100).toFixed(1)}%">${vis_esc(lab(b))}</span>`);
+    const names = s.names ? `<p class="legend-bands"><span>${vis_esc(t(s.names[0]))}</span><span>${vis_esc(t(s.names[5]))}</span></p>` : '';
+    return `<div class="legend legend-conc compact" data-pollutant="${s.pollutant}" data-what="total">`
+      + `<p class="legend-title">${vis_esc(t('scene.legend.total.short', { p: vis_shortName(s.pollutant), unit: info.unit }))}</p>`
+      + `<div class="legend-cells" aria-hidden="true">${cells.join('')}</div><div class="legend-ticks" aria-hidden="true">${ticks.join('')}</div>${names}</div>`;
+  }
   const rows = [];
   for (let i = 0; i < 6; i++) {
     const lo = i ? s.breaks[i - 1] : 0, hi = s.breaks[i];
-    const range = i < 5 ? `${fmt(lo, lo % 1 ? dec : 0)}–${fmt(hi, hi % 1 ? dec : 0)}` : t('scene.legend.over', { lo: fmt(lo, lo % 1 ? dec : 0) });
+    const range = i < 5 ? `${lab(lo)}–${lab(hi)}` : t('scene.legend.over', { lo: lab(lo) });
     const name = s.names ? ` <span class="legend-name">${vis_esc(t(s.names[i]))}</span>` : '';
-    rows.push(`<li><span class="legend-swatch" style="background:${s.colors[i]}" aria-hidden="true"></span><span class="legend-range">${vis_esc(range)}</span>${name}</li>`);
+    rows.push(`<li><span class="legend-swatch" style="background:${sw(i)}" aria-hidden="true"></span><span class="legend-range">${vis_esc(range)}</span>${name}</li>`);
   }
-  const note = t(s.basis === 'eaqi' ? 'scene.legend.eaqi' : s.basis === 'range' ? 'scene.legend.range' : 'scene.legend.limit');
-  return `<div class="legend legend-conc" data-pollutant="${s.pollutant}"><p class="legend-title">${vis_esc(info.label)} · ${vis_esc(info.unit)}</p>`
+  const title = hTxt ? t('scene.legend.total.title', { p: vis_shortName(s.pollutant), unit: info.unit, h: hTxt }) : `${info.label} · ${info.unit}`;
+  let note = t(s.basis === 'eaqi' ? 'scene.legend.eaqi' : s.basis === 'range' ? 'scene.legend.range' : 'scene.legend.limit');
+  if (opts.bg) note += `. ${t('scene.legend.total.note', { bg: opts.bg })}`;
+  return `<div class="legend legend-conc" data-pollutant="${s.pollutant}" data-what="total"><p class="legend-title">${vis_esc(title)}</p>`
     + `<ul>${rows.join('')}</ul><p class="legend-note">${vis_esc(note)}</p></div>`;
 }
 
@@ -223,6 +381,7 @@ function vis_v3(v) { return v instanceof THREE.Vector3 ? v : new THREE.Vector3(v
  * Returns true when the texture was rebuilt.
  */
 const vis_SLICE_FADE_M = 80;
+const vis_SLICE_DIM = 0.45;   // opacity factor of a stale slice (setDim)
 class ConcSlice {
   constructor(parent) {
     this.parent = parent || scene;
@@ -244,9 +403,15 @@ class ConcSlice {
       new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false }));
     this.mesh.renderOrder = 4;
     this.mesh.name = 'conc-slice';
+    this.mesh.material.opacity = this.dim ? vis_SLICE_DIM : 1;
     this.parent.add(this.mesh);
   }
   invalidate() { this.f = null; }
+  // Draw the slice paler (a stale field shown while the new one is computed, like the grey numbers).
+  setDim(on) {
+    this.dim = !!on;
+    if (this.mesh) this.mesh.material.opacity = this.dim ? vis_SLICE_DIM : 1;
+  }
   update(field, valueFn, heightM, visible, scale) {
     const show = !!(visible && field && typeof valueFn === 'function');
     if (this.mesh) this.mesh.visible = show;
@@ -639,33 +804,45 @@ class LabelLayer {
    * a label whose box overlaps an already placed one, plus vis_LABEL_PAD px, is hidden for this frame. Hidden
    * labels use visibility (not display) so their size stays measurable; sizes are measured once per text.
    */
-  update(cam, w, h) {
-    const v = this.v, cand = [];
+  /*
+   * Labels also stay inside their view (UI review, 2026-09-28: "Park mira i p…" was cut at the view
+   * edge): a label whose anchor is on screen but whose box would cross the left, right or top edge is
+   * shifted back inside by up to half its width (area labels such as parks and roads read the same);
+   * a label whose anchor is off screen is hidden. `blockers` (optional) are [x0, y0, x1, y1] rectangles in
+   * view pixels, e.g. the cards drawn over the view; a label that would sit under one is hidden.
+   */
+  update(cam, w, h, blockers = null) {
+    const v = this.v, cand = [], M = vis_LABEL_EDGE;
     for (const it of this.items) {
       v.copy(it.pos).project(cam);
       const d = cam.position.distanceTo(it.pos);
-      const show = !it.e.hidden && v.z < 1 && v.x > -1.05 && v.x < 1.05 && v.y > -1.05 && v.y < 1.1 && d < 2600;
+      const show = !it.e.hidden && v.z < 1 && v.x > -1 && v.x < 1 && v.y > -1 && v.y < 1.05 && d < 2600;
       if (show !== it.shown) { it.e.style.display = show ? '' : 'none'; it.shown = show; }
       if (!show) continue;
-      const x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
+      if (!it.size || !it.size[0]) it.size = [it.e.offsetWidth, it.e.offsetHeight];
+      const [bw, bh] = it.size;
+      let x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
+      x = clamp(x, Math.min(bw / 2 + M, w / 2), Math.max(w - bw / 2 - M, w / 2));
+      y = Math.max(y, bh + M);
       it.e.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
       it.e.style.opacity = d > 1500 ? String(clamp(1 - (d - 1500) / 1100, 0, 1)) : '1';
       cand.push({ it, x, y, d, pr: vis_labelPriority(it.e.className) });
     }
     cand.sort((a, b) => a.pr - b.pr || a.d - b.d);
-    const boxes = [], P = vis_LABEL_PAD;
+    const boxes = blockers ? blockers.slice() : [], P = vis_LABEL_PAD;
     for (const c of cand) {
       const it = c.it;
-      if (!it.size || !it.size[0]) it.size = [it.e.offsetWidth, it.e.offsetHeight];
       const [bw, bh] = it.size;
       const box = [c.x - bw / 2 - P, c.y - bh - P, c.x + bw / 2 + P, c.y + P];
-      const clash = boxes.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
+      const clash = bw > w - 2 * M || boxes.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
       const vis = clash ? 'hidden' : '';
       if (it.e.style.visibility !== vis) it.e.style.visibility = vis;
       if (!clash) boxes.push(box);
     }
   }
 }
+// Margin kept between a label and its view's edge (px).
+const vis_LABEL_EDGE = 4;
 // Declutter order of LabelLayer (lower first) by the label's kind class, and the gap kept between labels (px).
 const vis_LABEL_ORDER = ['lbl-station', 'lbl-scenario', 'lbl-road', 'lbl-park', 'lbl-water', 'lbl-poi'];
 const vis_LABEL_PAD = 3;

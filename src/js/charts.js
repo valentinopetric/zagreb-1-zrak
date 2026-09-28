@@ -224,7 +224,7 @@ function chart_xy(el, o) {
   if (o.unit) chart_svg('text', { class: 'unit', x: L - 5, y: T - 6 }, g).textContent = o.unit;
 
   // x ticks
-  for (const tk of o.xTicks(x0, x1)) {
+  for (const tk of o.xTicks(x0, x1, R - L)) {
     const x = chart_r1(X(tk.x));
     chart_svg('line', { class: tk.major ? 'grid major' : 'grid', x1: x, x2: x, y1: T, y2: B }, g);
     chart_svg('text', { class: `xtick${tk.major ? ' major' : ''}`, x, y: B + 14 }, g).textContent = tk.label;
@@ -376,7 +376,8 @@ function chart_xy(el, o) {
 /**
  * lineChart(el, {series: [{label, points: [{t, v}], cls, dash}], band: {lo, hi, label}, thresholds: [{v, label}],
  *   unit, yMax, label, now, nowLabel, marker, onPick(t), domain: [t0, t1], height, table, legend})
- * Times are hour-ending UTC ms; ticks every 6 local hours (every day beyond 4 days), dates at local midnight.
+ * Times are hour-ending UTC ms; ticks every 3, 6, 12 or 24 local hours, the densest step that keeps labels at least
+ * 44 px apart on the actual plot width (a date label such as "29 Sep" is ~40 px), with dates at local midnight.
  */
 function lineChart(el, opts) {
   const toXY = (pts) => (pts || []).map((p) => ({ x: p.t, v: p.v }));
@@ -387,11 +388,15 @@ function lineChart(el, opts) {
     domain: opts.domain,
     xTitle: t('chart.time'),
     fmtX: (x) => fmtLocal(x, { ending: true }),
-    xTicks(a, b) {
-      const span = b - a, every = span > 4 * data_DAY ? 24 : 6, out = [];
+    xTicks(a, b, widthPx = 300) {
+      const span = Math.max(b - a, data_HOUR), pxPerHour = (widthPx * data_HOUR) / span;
+      const every = [3, 6, 12, 24, 48, 96, 168, 336, 720, 1440, 2160, 4320, 8760].find((h) => h * pxPerHour >= 44) || 8760, out = [];
+      let midnights = 0;
       for (let x = ZgTime.ceilHour(a); x <= b; x += data_HOUR) {
         const p = ZgTime.parts(x);
-        if (p.h % every !== 0) continue;
+        if (every > 24) {   // multi-day steps: every (every / 24)-th local midnight
+          if (p.h !== 0 || midnights++ % (every / 24) !== 0) continue;
+        } else if (p.h % every !== 0) continue;
         out.push({ x, major: p.h === 0, label: p.h === 0 ? fmtLocal(x, { time: false }) : String(p.h).padStart(2, '0') });
       }
       return out;

@@ -37,7 +37,8 @@
  *   pollutant   'no2' | 'nox' | 'pm10' | 'pm25' | 'co' | 'c6h6';  index 'eea' | 'iszz'
  *   calibrated  true = β from calibration.json, false = raw physics (β = 1)
  *   bandLevel   2..6  EAQI band for the street-area share
- *   slice, sliceH, palette ('cb' colour-blind safe | 'eaqi' official EEA colours), particles, streaks, xray, lod2,
+ *   slice, sliceWhat ('inc' local increment, the default | 'total' background + increment), sliceH,
+ *   palette ('cb' colour-blind safe | 'eaqi' official EEA colours; bands of the total only), particles, streaks, xray, lod2,
  *   bcol ('plain'|'year'|'height'), cam, split ('split'|'today'|'scenario')
  *   dataView    'diurnal' | 'monthly' | 'annual' | 'rose'
  */
@@ -65,17 +66,29 @@ const UI_STRINGS = {
     'ui.mode.now': '<b>Sada:</b> vjetar i vrijeme iz modela ECMWF IFS za tekući sat.',
     'ui.mode.forecast': '<b>Prognoza:</b> sat iz prognoze ECMWF IFS, pozadina iz CAMS-a.',
     'ui.mode.line': '{mode} {time}',
+    'ui.span': '{date}, {a}–{b} h',
+    'ui.model.more': 'Koliko je točno?',
+    'ui.model.lbm': 'Model: 3D simulacija vjetra i širenja, {cal}. {src}',
+    'ui.model.cal': 'kalibrirana na mjerenjima iz {period} (β = {beta})',
+    'ui.model.raw': 'sirova fizika (β = 1, bez kalibracije)',
+    'ui.model.uncal': 'još nije kalibrirana (β = 1)',
+    'ui.model.gcal': 'kalibriran (β = {beta})',
+    'ui.model.src.lut': 'Brojke na postaji: tablica odziva na mreži od {grid}.',
+    'ui.model.src.field': 'Brojke na postaji: polje izračunato u ovom pregledniku, mreža od {grid}.',
+    'ui.model.src.fallback': 'Brojke na postaji zasad daje približni model.',
+    'ui.model.approx': 'Model: približni (Gaussov, bez 3D strujanja), {cal}. Ovaj preglednik ne može pokrenuti 3D simulaciju vjetra.',
     // now at the station
     'ui.now.h': 'Sada na postaji ZAGREB-1',
     'ui.now.chips.aria': 'Zadnje izmjerene vrijednosti na postaji ZAGREB-1',
     'ui.now.use': 'Koristi sadašnje vrijeme',
     'ui.now.loading': 'Učitavam mjerenja s ISZZ-a…',
-    'ui.now.time': 'Zadnji sat {time} (prosjek sata koji tada završava)',
+    'ui.now.time': 'Zadnji izmjereni sat: {span}',
+    'ui.now.at': 'sat do {time}',
     'ui.now.age': 'prije {h} h',
     'ui.now.badge': 'Službeni indeks ISZZ-a: {name} (stare granice EEA, PM kao 24-satni prosjek).',
     'ui.now.badge.none': 'Službeni indeks ISZZ-a trenutno nije dostupan.',
     'ui.now.badge.aria': 'Indeks kvalitete zraka {n}: {name}',
-    'ui.now.wind': 'Izmjereni vjetar na postaji: {u} m/s {dir}. Vjetrokaz stoji uz cestu i nepouzdan je za sjeverne smjerove, pa ga model ne koristi.',
+    'ui.now.wind': 'Vjetar na postaji: {u} m/s {dir}. Samo za usporedbu: vjetrokaz stoji uz cestu i nepouzdan je za sjeverne smjerove, pa model uzima vjetar iz ECMWF IFS.',
     'ui.now.wind.none': 'Izmjereni vjetar na postaji nije dostupan.',
     'ui.now.bg': 'Pozadina (ZAGREB-4, prigradska): {list}',
     'ui.now.bg.none': 'Pozadina (ZAGREB-4) nije dostupna.',
@@ -107,8 +120,9 @@ const UI_STRINGS = {
     'ui.preset.hint.now': 'Vjetar, oblaci i visina sloja miješanja iz ECMWF IFS za tekući sat; pozadina sa ZAGREB-4.',
     'ui.preset.hint.fc24': 'Isti sat sutra iz prognoze ECMWF IFS; pozadina iz CAMS-a, korigirana prema ZAGREB-4.',
     'ui.preset.fail': 'Prognoza nije dostupna ({err}). Postavke su ostale nepromijenjene.',
+    'ui.preset.offline': '„Sada” i „Prognoza +24 h” trebaju mjerenja i prognozu uživo, a učitavanje uživo je isključeno (?live=0).',
     // weather and time
-    'ui.weather.h': 'Vrijeme i doba dana',
+    'ui.weather.h': 'Vjetar i doba dana',
     'ui.wind.speed': 'Vjetar na 10 m',
     'ui.wind.calm': 'Tišina: smjer nije određen, pa model uzima prosjek svih smjerova.',
     'ui.wind.bft': '{name}, {b} bofora na 10 m visine.',
@@ -219,6 +233,8 @@ const UI_STRINGS = {
     // comparison
     'ui.cmp.h': 'Usporedba: danas i scenarij',
     'ui.cmp.measure': 'Veličina',
+    'ui.cmp.caption': 'Usporedba današnjeg kvarta i scenarija za odabrani sat',
+    'ui.cmp.time': 'Odabrani sat: {span} (lokalno vrijeme).',
     'ui.cmp.total': 'Ukupno {p} na ulazu postaje (4 m), {unit}',
     'ui.cmp.inc.u': 'Od lokalnih izvora, {unit}',
     'ui.cmp.bg.u': 'Pozadina, {unit}',
@@ -255,7 +271,7 @@ const UI_STRINGS = {
     'ui.hind.model': 'model',
     'ui.hind.bg': 'pozadina',
     'ui.hind.band': 'model × ½ … × 2',
-    'ui.hind.note': 'Model: vjetar i sloj miješanja iz ECMWF IFS, pozadina sa ZAGREB-4, promet i izvori kako su postavljeni gore. Validirani podaci objavljuju se jednom godišnje; {valid}.',
+    'ui.hind.note': 'Svaka točka je sat koji završava u njezino vrijeme (lokalno). Model: vjetar i sloj miješanja iz ECMWF IFS, pozadina sa ZAGREB-4, promet i izvori kako su postavljeni. Validirani podaci objavljuju se jednom godišnje; {valid}.',
     'ui.hind.valid.none': 'za ovo razdoblje još ne postoje',
     'ui.hind.valid.some': 'prikazani su crtkano',
     'ui.hind.valid.loading': 'učitavam ih',
@@ -311,9 +327,10 @@ const UI_STRINGS = {
     'ui.fc.today': 'danas',
     'ui.fc.scenario': 'scenarij',
     'ui.fc.bg': 'pozadina (CAMS, korigiran)',
-    'ui.fc.note': 'Vrijeme: ECMWF IFS. Pozadina: CAMS pomnožen omjerom izmjerenog i CAMS-a na ZAGREB-4 u zadnjih 14 dana ({ratios}). Klikni sat da ga postaviš u 3D prikazu. Scenarij u prognozi uključuje samo mjere za promet.',
+    'ui.fc.note': 'Svaka točka je sat koji završava u njezino vrijeme (lokalno). Vrijeme: ECMWF IFS. Pozadina: CAMS pomnožen omjerom izmjerenog i CAMS-a na ZAGREB-4 u zadnjih 14 dana ({ratios}). Klikni sat da ga postaviš u 3D prikazu. Scenarij u prognozi uključuje samo mjere za promet.',
     'ui.fc.ratio.live': 'uživo',
     'ui.fc.ratio.default': 'omjeri iz 2025.',
+    'ui.fc.nocams': 'CAMS Europe seže samo do 96 h od ponoćnog izračuna, pa za {n} h na kraju prognoze pozadina nije iz CAMS-a nego: {src}.',
     'ui.fc.loading': 'Učitavam prognozu…',
     'ui.fc.fail': 'Prognoza nije dostupna: {err}',
     'ui.fc.load': 'Osvježi prognozu',
@@ -354,13 +371,30 @@ const UI_STRINGS = {
     'ui.lim.eu24': 'EU 24 h {v}',
     'ui.lim.eu8h': 'EU 8 h {v}',
     'ui.lim.euyr': 'EU god. {v}',
+    // on the map, groups
+    'ui.map.h': 'Na karti',
+    'ui.map.what': 'Boja presjeka prikazuje',
+    'ui.map.what.inc': 'lokalne izvore',
+    'ui.map.what.total': 'ukupno',
+    'ui.map.what.hint.inc': 'Koliko promet i kućna ložišta dodaju povrh pozadine. Pozadina je ista na cijeloj karti, pa se tako vide ulice i kamo vjetar nosi ispuh.',
+    'ui.map.what.hint.total': 'Pozadina + lokalni izvori, u razredima indeksa kvalitete zraka (za NOₓ, CO i benzen prema graničnim vrijednostima).',
+    'ui.map.stale': 'Dok se računa novo polje, presjek je od prethodnog izračuna i prikazan je blijeđe.',
+    'ui.map.approx': 'Presjek daje približni model bez 3D strujanja.',
+    'ui.adv.h': 'Napredne postavke',
+    'ui.adv.sub': 'stabilnost, promet i izvori, indeks, prikaz',
+    'ui.adv.weather': 'Stabilnost i sloj miješanja',
+    'ui.val.sub': 'zadnja 72 sata, ruža smjerova, točnost',
+    'ui.fc.sub': 'sljedeća 72 sata (ECMWF IFS, CAMS)',
+    'ui.data.sub': 'arhiva mjerenja postaje ZAGREB-1',
     // display
     'ui.disp.h': 'Prikaz',
     'ui.disp.slice': 'Presjek koncentracije na odabranoj visini',
     'ui.disp.sliceH': 'Visina presjeka',
+    'ui.disp.sliceH.hint': 'Zadano 4 m, visina ulaza postaje; 1,5 m je visina disanja.',
     'ui.disp.palette': 'Boje presjeka',
     'ui.disp.palette.cb': 'jedna boja (za sve)',
     'ui.disp.palette.eaqi': 'boje indeksa EEA',
+    'ui.disp.palette.hint': 'Vrijedi za kartu „ukupno”. Karta lokalnih izvora ima svoju ljestvicu (jedna ljubičasta boja, linearna od nule).',
     'ui.disp.particles': 'Čestice iz ispuha uz ceste (samo prikaz)',
     'ui.disp.streaks': 'Tragovi vjetra',
     'ui.disp.xray': 'Prozirne zgrade',
@@ -424,16 +458,28 @@ const UI_STRINGS = {
     'ui.mode.now': '<b>Now:</b> wind and weather from ECMWF IFS for the current hour.',
     'ui.mode.forecast': '<b>Forecast:</b> an hour from the ECMWF IFS forecast, background from CAMS.',
     'ui.mode.line': '{mode} {time}',
+    'ui.span': '{date}, {a}–{b} h',
+    'ui.model.more': 'How good is it?',
+    'ui.model.lbm': 'Model: 3D wind and dispersion simulation, {cal}. {src}',
+    'ui.model.cal': 'calibrated on {period} measurements (β = {beta})',
+    'ui.model.raw': 'raw physics (β = 1, not calibrated)',
+    'ui.model.uncal': 'not calibrated yet (β = 1)',
+    'ui.model.gcal': 'calibrated (β = {beta})',
+    'ui.model.src.lut': 'Station numbers: response table on the {grid} grid.',
+    'ui.model.src.field': 'Station numbers: a field computed in this browser on the {grid} grid.',
+    'ui.model.src.fallback': 'Station numbers come from the approximate model for now.',
+    'ui.model.approx': 'Model: approximate (Gaussian, no 3D flow), {cal}. This browser cannot run the 3D wind simulation.',
     'ui.now.h': 'Now at the ZAGREB-1 station',
     'ui.now.chips.aria': 'Latest measured values at ZAGREB-1',
     'ui.now.use': 'Use current conditions',
     'ui.now.loading': 'Loading measurements from ISZZ…',
-    'ui.now.time': 'Last hour {time} (mean of the hour ending then)',
+    'ui.now.time': 'Latest measured hour: {span}',
+    'ui.now.at': 'hour to {time}',
     'ui.now.age': '{h} h ago',
     'ui.now.badge': 'Official ISZZ index: {name} (legacy EEA bands, PM as a 24 h mean).',
     'ui.now.badge.none': 'The official ISZZ index is not available right now.',
     'ui.now.badge.aria': 'Air quality index {n}: {name}',
-    'ui.now.wind': 'Wind measured at the station: {u} m/s {dir}. The vane stands by the road and is unreliable for northerly directions, so the model does not use it.',
+    'ui.now.wind': 'Wind at the station: {u} m/s {dir}. For reference only: the vane stands by the road and is unreliable for northerly winds, so the model uses the ECMWF IFS wind.',
     'ui.now.wind.none': 'Station wind is not available.',
     'ui.now.bg': 'Background (ZAGREB-4, suburban): {list}',
     'ui.now.bg.none': 'Background (ZAGREB-4) is not available.',
@@ -464,7 +510,8 @@ const UI_STRINGS = {
     'ui.preset.hint.now': 'Wind, cloud and mixing height from ECMWF IFS for the current hour; background from ZAGREB-4.',
     'ui.preset.hint.fc24': 'The same hour tomorrow from the ECMWF IFS forecast; background from CAMS, corrected to ZAGREB-4.',
     'ui.preset.fail': 'The forecast is not available ({err}). Settings are unchanged.',
-    'ui.weather.h': 'Weather and time of day',
+    'ui.preset.offline': '"Now" and "Forecast +24 h" need live measurements and the forecast, and live loading is switched off (?live=0).',
+    'ui.weather.h': 'Wind and time of day',
     'ui.wind.speed': 'Wind at 10 m',
     'ui.wind.calm': 'Calm: the direction is undefined, so the model averages over all directions.',
     'ui.wind.bft': '{name}, force {b} on the Beaufort scale at 10 m.',
@@ -571,6 +618,8 @@ const UI_STRINGS = {
     'ui.eaqi.ge': '≥ {name}',
     'ui.cmp.h': 'Comparison: today and scenario',
     'ui.cmp.measure': 'Quantity',
+    'ui.cmp.caption': 'Today\'s neighbourhood and the scenario compared for the selected hour',
+    'ui.cmp.time': 'Selected hour: {span} (local time).',
     'ui.cmp.total': 'Total {p} at the station inlet (4 m), {unit}',
     'ui.cmp.inc.u': 'From local sources, {unit}',
     'ui.cmp.bg.u': 'Background, {unit}',
@@ -606,7 +655,7 @@ const UI_STRINGS = {
     'ui.hind.model': 'model',
     'ui.hind.bg': 'background',
     'ui.hind.band': 'model × ½ … × 2',
-    'ui.hind.note': 'Model: wind and mixing height from ECMWF IFS, background from ZAGREB-4, traffic and sources as set above. Validated data are published once a year; {valid}.',
+    'ui.hind.note': 'Each point is the hour ending at its time (local). Model: wind and mixing height from ECMWF IFS, background from ZAGREB-4, traffic and sources as set. Validated data are published once a year; {valid}.',
     'ui.hind.valid.none': 'they do not exist yet for this period',
     'ui.hind.valid.some': 'they are shown dashed',
     'ui.hind.valid.loading': 'loading them',
@@ -661,9 +710,10 @@ const UI_STRINGS = {
     'ui.fc.today': 'today',
     'ui.fc.scenario': 'scenario',
     'ui.fc.bg': 'background (CAMS, corrected)',
-    'ui.fc.note': 'Weather: ECMWF IFS. Background: CAMS times the ratio of measured to CAMS at ZAGREB-4 over the last 14 days ({ratios}). Click an hour to set it in the 3D view. The scenario in the forecast includes the traffic measures only.',
+    'ui.fc.note': 'Each point is the hour ending at its time (local). Weather: ECMWF IFS. Background: CAMS times the ratio of measured to CAMS at ZAGREB-4 over the last 14 days ({ratios}). Click an hour to set it in the 3D view. The scenario in the forecast includes the traffic measures only.',
     'ui.fc.ratio.live': 'live',
     'ui.fc.ratio.default': '2025 ratios',
+    'ui.fc.nocams': 'CAMS Europe reaches only 96 h from its 00 UTC run, so for the last {n} h of the forecast the background is not CAMS but: {src}.',
     'ui.fc.loading': 'Loading the forecast…',
     'ui.fc.fail': 'The forecast is not available: {err}',
     'ui.fc.load': 'Refresh forecast',
@@ -703,12 +753,28 @@ const UI_STRINGS = {
     'ui.lim.eu24': 'EU 24 h {v}',
     'ui.lim.eu8h': 'EU 8 h {v}',
     'ui.lim.euyr': 'EU annual {v}',
+    'ui.map.h': 'On the map',
+    'ui.map.what': 'The slice colour shows',
+    'ui.map.what.inc': 'local sources',
+    'ui.map.what.total': 'total',
+    'ui.map.what.hint.inc': 'What traffic and domestic heating add on top of the background. The background is the same all over the map, so this is what shows the streets and where the wind takes the exhaust.',
+    'ui.map.what.hint.total': 'Background + local sources, in the bands of the air-quality index (for NOₓ, CO and benzene, by the limit values).',
+    'ui.map.stale': 'While a new field is computed, the slice is from the previous run and drawn paler.',
+    'ui.map.approx': 'The slice comes from the approximate model without 3D flow.',
+    'ui.adv.h': 'Advanced settings',
+    'ui.adv.sub': 'stability, traffic and sources, index, display',
+    'ui.adv.weather': 'Stability and mixing layer',
+    'ui.val.sub': 'last 72 hours, direction rose, accuracy',
+    'ui.fc.sub': 'next 72 hours (ECMWF IFS, CAMS)',
+    'ui.data.sub': 'ZAGREB-1 measurement archive',
     'ui.disp.h': 'Display',
     'ui.disp.slice': 'Concentration slice at the chosen height',
     'ui.disp.sliceH': 'Slice height',
+    'ui.disp.sliceH.hint': 'Default 4 m, the height of the station inlet; 1.5 m is breathing height.',
     'ui.disp.palette': 'Slice colours',
     'ui.disp.palette.cb': 'one hue (for everyone)',
     'ui.disp.palette.eaqi': 'EEA index colours',
+    'ui.disp.palette.hint': 'For the "total" map. The local-sources map has its own scale (one violet hue, linear from zero).',
     'ui.disp.particles': 'Exhaust particles along the roads (display only)',
     'ui.disp.streaks': 'Wind streaks',
     'ui.disp.xray': 'See-through buildings',
@@ -781,6 +847,7 @@ const ui_X = {
   legendHTML: typeof legendHTML === 'function' ? legendHTML : null,
   particleLegendHTML: typeof particleLegendHTML === 'function' ? particleLegendHTML : null,
   CONC_SCALES: typeof CONC_SCALES !== 'undefined' ? CONC_SCALES : null,
+  INC_SCALES: typeof INC_SCALES !== 'undefined' ? INC_SCALES : null,
   Aero: typeof Aero === 'function' ? Aero : null,
   LBM: typeof LBM !== 'undefined' ? LBM : null,
   TUNNEL: typeof TUNNEL !== 'undefined' ? TUNNEL : null,
@@ -836,6 +903,25 @@ function ui_climT(month) { return 10.2 + 10.5 * Math.cos((2 * Math.PI * (month -
 /** Heating season October–March (critic §4.6) and leaf-on May–October (critic §4.3) by local month. */
 function ui_isHeatingMonth(m) { return m >= 10 || m <= 3; }
 function ui_isLeafMonth(m) { return m >= 5 && m <= 10; }
+/**
+ * The hour ending at tMs as an explicit local interval, e.g. "28 Sep 2026, 08–09 h" (architecture §2: times are
+ * hour-ending; the date is that of the hour's start, so the hour ending 24:00 reads "27 Sep, 23–24 h").
+ */
+function ui_span(tMs, year = false) {
+  if (!Number.isFinite(tMs)) return '–';
+  const hs = ZgTime.hourStart(tMs);
+  return t('ui.span', { date: fmtLocal(tMs - UI_H, { time: false, year }), a: String(hs.h).padStart(2, '0'), b: String(ui_endHour(tMs)).padStart(2, '0') });
+}
+/** Local clock hour at the END of the hour ending at tMs, 1–24 (midnight is 24; on DST days it is not start + 1). */
+function ui_endHour(tMs) {
+  const p = ZgTime.parts(tMs);
+  return p.h === 0 && p.mi === 0 ? 24 : p.h;
+}
+/** "60x60x16@10m" → "10 m" (the cell size of a grid id, architecture §5.1). */
+function ui_gridLabel(id) {
+  const m = /@(\d+(?:\.\d+)?)m/.exec(String(id || ''));
+  return m ? `${fmt(+m[1])} m` : (id ? String(id) : '?');
+}
 
 // ------------------------------------------------------------------ fallbacks for missing pure modules
 /*
@@ -955,7 +1041,7 @@ const state = {
   // (integration check against env.json, 2026-09-28).
   custom: { x: 75, z: -10, w: 40, d: 24, h: 25, rot: 0 },
   pollutant: 'no2', index: 'eea', calibrated: true, bandLevel: 3,
-  slice: true, sliceH: 4, palette: 'cb', particles: true, streaks: false, xray: false, lod2: false, bcol: 'plain', cam: 'air',
+  slice: true, sliceWhat: 'inc', sliceH: 4, palette: 'cb', particles: true, streaks: false, xray: false, lod2: false, bcol: 'plain', cam: 'air',
   split: 'split', dataView: 'diurnal',
 };
 window.__z1 = { ready: false, fields: 0, receptor: null, errors: [], state };
@@ -1362,16 +1448,18 @@ function ui_strengthsAll(viewId, tMs = state.time) {
  * and view; cellValue() then does the per-cell arithmetic. source = 'field' (GPU) or 'fallback' (approximate
  * slice), so each gets its own calibration.
  */
-function ui_valueFn(viewId, met, bg, p, source = 'field') {
+function ui_valueFn(viewId, met, bg, p, source = 'field', incOnly = false) {
   if (!ui_X.cellValue) return null;
   if (ui_X.sliceContext) {
-    const ctx = ui_try('model.sliceContext', () => ui_X.sliceContext({ met, dateUTC: met.dateUTC, measures: ui_measuresFor(viewId), background: bg, opts: ui_opts(), source }), null);
+    // incOnly: the local increment (model.js cellValue with met.incOnly; for NO2 the chemistry total minus NO2_bg)
+    const ctx = ui_try('model.sliceContext', () => ui_X.sliceContext({ met, dateUTC: met.dateUTC, measures: ui_measuresFor(viewId), background: bg, opts: { ...ui_opts(), incOnly }, source }), null);
     if (!ctx) return null;
     return (g4, a4) => ui_X.cellValue(g4, a4, ctx.strengthsAll, ctx.met, ctx.bg, p);
   }
   const S = ui_strengthsAll(viewId);
   if (!S) return null;
-  return (g4, a4) => ui_X.cellValue(g4, a4, S, met, bg, p);
+  const m = { ...met, incOnly };
+  return (g4, a4) => ui_X.cellValue(g4, a4, S, m, bg, p);
 }
 /** Street share above the band and the school value for one view. */
 function ui_pointStats(viewId, met, bg) {
@@ -1578,17 +1666,19 @@ function ui_renderWeather() {
   ui_setText('#stab-hint', `${t('ui.stab.hint', { cls: met.cls, src, grp: met.group, h: fmt(met.h_eff), hg: fmt(hg) })} ${metLine}`);
   // date / hour (hour-ending semantics: 24:00 belongs to the previous day)
   const hs = ZgTime.hourStart(state.time);
-  const he = hs.h + 1;
+  const he = hs.h + 1;                     // slider position: local hour START + 1 (1–24)
+  const hend = ui_endHour(state.time);     // the clock at the hour's end (differs from he on DST switch days)
   const dateEl = $('#date');
   const iso = `${hs.y}-${String(hs.mo).padStart(2, '0')}-${String(hs.d).padStart(2, '0')}`;
   if (dateEl && dateEl.value !== iso) dateEl.value = iso;
   const hourEl = $('#hour');
   if (hourEl && +hourEl.value !== he) hourEl.value = String(he);
-  ui_setText('#hour-out', t('ui.time.out', { end: `${String(he).padStart(2, '0')}:00`, a: String(hs.h).padStart(2, '0'), b: String(he).padStart(2, '0') }));
+  ui_setText('#hour-out', t('ui.time.out', { end: `${String(hend).padStart(2, '0')}:00`, a: String(hs.h).padStart(2, '0'), b: String(hend).padStart(2, '0') }));
   const dt = ZgTime.dayType(state.time);
   ui_setText('#daytype', t('ui.time.derived', { dow: t(`ui.dow.${hs.dow}`), daytype: t(`ui.daytype.${dt}`), month: t(`ui.month.${hs.mo}`), heat: ui_isHeatingMonth(hs.mo) ? t('ui.heatseason') : '' }));
   const ml = { explore: 'ui.mode.explore', now: 'ui.mode.now', forecast: 'ui.mode.forecast' }[state.mode];
-  ui_setHTML('#mode-line', t('ui.mode.line', { mode: t(ml), time: fmtLocal(state.time, { ending: true, year: true }) }));
+  ui_setHTML('#mode-line', t('ui.mode.line', { mode: t(ml), time: ui_span(state.time, true) }));
+  ui_setText('#cmp-time', t('ui.cmp.time', { span: ui_span(state.time, true) }));
 }
 function ui_renderSources() {
   for (const k of ['traffic', 'trafficA', 'trafficB']) ui_setText(`#${k}-out`, `${state[k]} %`);
@@ -1614,13 +1704,23 @@ function ui_renderSources() {
   const bl = ui_X.buildingLegendHTML && state.bcol !== 'plain' ? ui_try('city.buildingLegendHTML', () => ui_X.buildingLegendHTML(state.bcol), '') : '';
   if (typeof bl === 'string' && bl) ui_setHTML('#bcol-hint', bl);
   else ui_setText('#bcol-hint', state.bcol === 'plain' ? '' : t(`ui.disp.bcol.hint.${state.bcol}`));
-  ui_setText('#preset-hint', state.preset ? t(`ui.preset.hint.${state.preset}`) : '');
+  ui_setText('#preset-hint', [state.preset ? t(`ui.preset.hint.${state.preset}`) : '', UI_OFFLINE ? t('ui.preset.offline') : ''].filter(Boolean).join(' '));
+  ui_setText('#slicewhat-hint', t(state.sliceWhat === 'inc' ? 'ui.map.what.hint.inc' : 'ui.map.what.hint.total'));
+  ui_setText('#palette-hint', t('ui.disp.palette.hint'));
 }
 /** aria-pressed on every segmented control and preset from the state. */
 function ui_syncControls() {
-  const map = { lid: state.lid, pollutant: state.pollutant, index: state.index, calib: state.calibrated ? 'cal' : 'raw', bcol: state.bcol, split: state.split, dataView: state.dataView, palette: state.palette };
+  const map = { lid: state.lid, pollutant: state.pollutant, index: state.index, calib: state.calibrated ? 'cal' : 'raw', bcol: state.bcol, split: state.split, dataView: state.dataView, palette: state.palette, sliceWhat: state.sliceWhat };
   for (const g of $$('[data-group]')) for (const b of $$('button[data-value]', g)) b.setAttribute('aria-pressed', String(b.dataset.value === map[g.dataset.group]));
   for (const b of $$('[data-preset]')) b.setAttribute('aria-pressed', String(b.dataset.preset === state.preset));
+  // "Now" and "Forecast +24 h" need live data: disabled (with the reason as a tooltip) under ?live=0
+  for (const b of [...$$('[data-preset="now"], [data-preset="fc24"]'), $('#use-now'), $('#fc-load')]) {
+    if (!b) continue;
+    b.disabled = UI_OFFLINE;
+    if (UI_OFFLINE) b.title = t('ui.preset.offline'); else b.removeAttribute('title');
+  }
+  // the palette choice colours the bands of the total; the local-increment map has one fixed ramp
+  for (const b of $$('[data-group="palette"] button')) b.disabled = state.sliceWhat !== 'total';
   for (const b of $$('[data-cam]')) b.setAttribute('aria-pressed', String(b.dataset.cam === state.cam));
   const vals = { u10: state.u10, traffic: state.traffic, trafficA: state.trafficA, trafficB: state.trafficB, ev: state.measures.evShare,
     dtraffic: state.measures.trafficChange, 'slice-h': state.sliceH, cw: state.custom.w, cd: state.custom.d, ch: state.custom.h, cr: state.custom.rot };
@@ -1660,6 +1760,7 @@ function ui_renderNow() {
   };
   chips.textContent = '';
   let tLast = -Infinity;
+  for (const p of UI_NOW_POLS) { const l = latest('z1', p); if (l) tLast = Math.max(tLast, l.t); }
   for (const p of UI_NOW_POLS) {
     const l = latest('z1', p);
     const li = document.createElement('li');
@@ -1680,16 +1781,18 @@ function ui_renderNow() {
     band.appendChild(document.createTextNode(ui_bandLimits(p)
       ? (bd.level ? `${t(`ui.eaqi.${bd.level}`)} · ${isPM ? t('ui.now.pm24') : t('ui.now.hourly')}` : t('ui.eaqi.0'))
       : t('ui.now.noindex')));
+    // a value from another hour than the card's header says so (e.g. CO often arrives an hour later)
+    if (l && l.t !== tLast) band.appendChild(document.createTextNode(` · ${t('ui.now.at', { time: fmtLocal(l.t, { ending: true, date: false }) })}`));
     li.appendChild(band);
     if (l && Date.now() - l.t > 6 * UI_H && src === 'live') li.classList.add('stale');
     chips.appendChild(li);
-    if (l) tLast = Math.max(tLast, l.t);
   }
-  ui_setText('#now-time', Number.isFinite(tLast) ? `${t('ui.now.time', { time: fmtLocal(tLast, { ending: true }) })}, ${t('ui.now.age', { h: fmt(Math.max(0, (Date.now() - tLast) / UI_H), 1) })}` : t(ui_live.status === 'loading' ? 'ui.now.loading' : 'ui.now.src.none'));
-  // badge: the official ISZZ index (legacy bands)
+  ui_setText('#now-time', Number.isFinite(tLast) ? `${t('ui.now.time', { span: ui_span(tLast) })} · ${t('ui.now.age', { h: fmt(Math.max(0, (Date.now() - tLast) / UI_H), (Date.now() - tLast) / UI_H < 10 ? 1 : 0) })}` : t(ui_live.status === 'loading' ? 'ui.now.loading' : 'ui.now.src.none'));
+  // badge: the official ISZZ index (legacy bands); shown only when ISZZ published one (the note says so otherwise)
   const badge = $('#now-badge');
   const ez = ui_live.eaqi && ui_live.eaqi.z1;
   const lvl = ez ? ez.index : 0;
+  badge.hidden = !lvl;
   badge.textContent = lvl ? String(lvl) : '–';
   badge.dataset.level = String(lvl);
   badge.style.background = lvl ? UI_EAQI.iszz.colors[lvl] : '';
@@ -2013,8 +2116,10 @@ function ui_renderForecast() {
   const rows = ui_forecastRows();
   const today = [], scen = [], bg = [];
   const scenDiffers = JSON.stringify(ui_measuresFor('scenario')) !== JSON.stringify(ui_measuresFor('today'));
+  let noCams = 0;   // hours beyond the CAMS Europe forecast (the 00Z run + 96 h): the background falls back
   for (const r of rows) {
     const b = ui_bg(r.t, 'cams');
+    if (b.source.no2 !== 'cams') noCams++;
     const a = ui_modelAt(r.t, r, 'today', p, b);
     today.push({ t: r.t, v: a ? a.total : NaN });
     bg.push({ t: r.t, v: a ? a.bg : NaN });
@@ -2031,7 +2136,7 @@ function ui_renderForecast() {
   }));
   const R = ui_live.ratios;
   const rtxt = R ? ['no2', 'o3', 'pm10', 'pm25'].map((q) => `${ui_polName(q)} ${fmt(R[q], 2)}`).join(', ') + ` (${t(R.source.no2 === 'live' ? 'ui.fc.ratio.live' : 'ui.fc.ratio.default')})` : '–';
-  ui_setText('#fc-note', t('ui.fc.note', { ratios: rtxt }));
+  ui_setText('#fc-note', t('ui.fc.note', { ratios: rtxt }) + (noCams ? ` ${t('ui.fc.nocams', { n: fmt(noCams), src: t(`ui.bgsrc.${ui_bg(rows[rows.length - 1].t, 'cams').source.no2}`) })}` : ''));
 }
 function ui_setForecastHour(tt) {
   const r = ui_live.fc && ui_byT(ui_live.fc).get(tt);
@@ -2110,14 +2215,29 @@ function ui_renderData() {
 }
 
 // ------------------------------------------------------------------ panel: display legend, footer
+/*
+ * The slice legend, in the panel (full: title with height, ramp or bands, a note naming the background) and on
+ * the 3D view (compact, in the card of the first visible view; style.css hides the second view's copy in split
+ * view). What it says follows state.sliceWhat: the local increment (the default map) or the total.
+ */
 function ui_renderLegend() {
   const el = $('#legend');
   if (!el) return;
+  const p = state.pollutant, what = state.sliceWhat;
+  const r = ui_res.today, bgv = r && r.bg ? r.bg[p] : NaN;
+  const bg = Number.isFinite(bgv) ? `${ui_fmtC(p, bgv)} ${ui_unit(p)}` : null;
+  const vf = r && ui_views.length ? ui_viewField('today', r.met) : null;
+  const extra = [];
+  if (vf && vf.approximate) extra.push(t('ui.map.approx'));
+  if (vf && vf.stale && !vf.approximate) extra.push(t('ui.map.stale'));
+  let html = null, compact = '';
   if (ui_X.legendHTML) {
-    const html = ui_try('visuals.legendHTML', () => ui_X.legendHTML(state.pollutant), null);
-    if (typeof html === 'string') { ui_setHTML(el, html); return; }
+    html = ui_try('visuals.legendHTML', () => ui_X.legendHTML(p, { what, bg, h: state.sliceH }), null);
+    compact = ui_try('visuals.legendHTML', () => ui_X.legendHTML(p, { what, compact: true }), '') || '';
   }
-  ui_setText(el, t('ui.disp.legend.none'));
+  if (typeof html === 'string') ui_setHTML(el, html + (extra.length ? `<p class="legend-note">${extra.join(' ')}</p>` : ''));
+  else ui_setText(el, t('ui.disp.legend.none'));
+  for (const v of $$('.view-legend')) { v.hidden = !state.slice || !compact; if (compact) ui_setHTML(v, compact); }
 }
 function ui_renderParticleLegend() {
   const el = $('#particle-legend');
@@ -2237,7 +2357,8 @@ function ui_changed({ request = false } = {}) {
   ui_invalidate('model', 'slices', 'points', 'charts', 'data');
   if (request) ui_scheduleRequest();
   else ui_maybeRequest();
-  if (ui_X.setDaylight) ui_try('scene.setDaylight', () => ui_X.setDaylight(new Date(state.time), ui_met().cc));
+  // the sun at the middle of the hour (state.time is the hour's end)
+  if (ui_X.setDaylight) ui_try('scene.setDaylight', () => ui_X.setDaylight(new Date(state.time - UI_H / 2), ui_met().cc));
 }
 function ui_manual(opts) {
   state.preset = null;
@@ -2401,7 +2522,7 @@ function ui_loadForecast(force = false) {
   ui_fcPromise = (async () => {
     try {
       // past_days = 3 so the 72 h hindcast has IFS weather for every hour (the Live default is 2, architecture §6.4)
-      const [fc, cams] = await Promise.all([Live.forecast({ pastDays: 3, forecastDays: 4 }), Live.cams().catch(() => null)]);
+      const [fc, cams] = await Promise.all([Live.forecast({ pastDays: 3, forecastDays: 4 }), Live.cams({ forecastDays: 4 }).catch(() => null)]);
       ui_live.fc = fc;
       ui_live.cams = cams;
       ui_live.ratios = Live.biasRatios(cams, ui_live.recent && ui_live.recent.z4long);
@@ -2425,13 +2546,13 @@ function ui_bindControls() {
   $('#date').addEventListener('change', (e) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value);
     if (!m) return;
-    state.time = ZgTime.toUTC(+m[1], +m[2], +m[3], +$('#hour').value);
+    state.time = ZgTime.toUTC(+m[1], +m[2], +m[3], +$('#hour').value - 1) + UI_H;   // slider = local hour start + 1
     state.met = null;
     ui_manual();
   });
   $('#hour').addEventListener('input', (e) => {
     const hs = ZgTime.hourStart(state.time);
-    state.time = ZgTime.toUTC(hs.y, hs.mo, hs.d, +e.target.value);
+    state.time = ZgTime.toUTC(hs.y, hs.mo, hs.d, +e.target.value - 1) + UI_H;   // slider = local hour start + 1 (DST-safe)
     state.met = null;
     ui_manual();
   });
@@ -2468,6 +2589,7 @@ function ui_bindControls() {
         if (ui_X.setConcPalette) ui_try('visuals.setConcPalette', () => ui_X.setConcPalette(v));
         ui_renderLegend(); ui_invalidate('slices');
       }
+      else if (grp === 'sliceWhat') { state.sliceWhat = v; ui_renderLegend(); ui_invalidate('slices'); }
       else if (grp === 'dataView') state.dataView = v;
       ui_changed();
       if (grp === 'pollutant') { ui_renderLegend(); ui_rose.key = null; if (ui_rose.model) ui_computeRose(); }
@@ -2478,7 +2600,7 @@ function ui_bindControls() {
   $('#fc-load').addEventListener('click', () => { ui_loadLive(); ui_loadForecast(true); });
   $('#sweep').addEventListener('click', ui_startSweep);
   $('#export-lut').addEventListener('click', ui_exportLUT);
-  $('#slice').addEventListener('change', (e) => { state.slice = e.target.checked; ui_invalidate('slices'); });
+  $('#slice').addEventListener('change', (e) => { state.slice = e.target.checked; ui_invalidate('slices'); ui_renderLegend(); });
   $('#slice-h').addEventListener('input', (e) => { state.sliceH = +e.target.value; ui_renderSources(); ui_invalidate('slices'); });
   $('#particles').addEventListener('change', (e) => { state.particles = e.target.checked; ui_renderParticleLegend(); ui_wantDraw = true; });
   $('#streaks').addEventListener('change', (e) => { state.streaks = e.target.checked; });
@@ -2486,7 +2608,66 @@ function ui_bindControls() {
   $('#lod2').addEventListener('change', (e) => { state.lod2 = e.target.checked; ui_applyLod2(); });
   for (const b of $$('[data-cam]')) b.addEventListener('click', () => ui_goTo(b.dataset.cam));
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui_placing) ui_setPlacing(false); });
-  I18N.onChange(() => { ui_applyI18n(); ui_buildDial(); ui_fillScenarioSelect(); ui_fillBandSelect(); ui_changed(); ui_renderNow(); ui_renderCal(); ui_renderFooter(); ui_renderLegend(); ui_renderParticleLegend(); ui_renderNotices(); ui_renderRose(); });
+  I18N.onChange(() => { ui_applyI18n(); ui_buildDial(); ui_fillScenarioSelect(); ui_fillBandSelect(); ui_changed(); ui_renderNow(); ui_renderCal(); ui_renderFooter(); ui_renderLegend(); ui_renderParticleLegend(); ui_renderNotices(); ui_renderRose(); ui_renderModelLine(); });
+  ui_bindGroups();
+}
+/*
+ * Collapsible groups (<details class="group">): which ones are open is remembered per viewer (localStorage, a
+ * convenience only: blocked storage just means all start closed). Their charts are drawn only while open, and
+ * again when opened. "How good is it?" in the model line opens the model group at its accuracy section.
+ */
+const UI_GROUPS_KEY = 'z1.groups';
+function ui_groupOpen(id) { const d = document.getElementById(id); return !d || d.tagName !== 'DETAILS' || d.open; }
+function ui_bindGroups() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(UI_GROUPS_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+  for (const d of $$('details.group')) {
+    if (saved[d.id]) d.open = true;
+    d.addEventListener('toggle', () => {
+      try {
+        const o = JSON.parse(localStorage.getItem(UI_GROUPS_KEY) || '{}') || {};
+        o[d.id] = d.open;
+        localStorage.setItem(UI_GROUPS_KEY, JSON.stringify(o));
+      } catch (e) { /* storage blocked: nothing to remember */ }
+      if (d.open) { ui_invalidate('charts', 'data'); if (d.id === 'grp-val') { ui_renderRose(); ui_renderSweepNote(); } }
+    });
+  }
+  const more = $('#model-more');
+  if (more) more.addEventListener('click', () => {
+    const g = $('#grp-val');
+    if (g) g.open = true;
+    const h = $('#h-cal');
+    if (h) h.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'start' });
+  });
+}
+/*
+ * The model status in one line under the title (architecture §7 "raw physics vs calibrated is visible"): what
+ * model runs, whether it is calibrated, and where the station numbers of the current hour come from (the receptor
+ * LUT and its grid, a field computed in this browser, or the approximate model). Details: "How good is it?".
+ */
+function ui_calPeriod() {
+  const per = Array.isArray(CAL && CAL.period) ? CAL.period : [];
+  const ys = [...new Set(per.map((q) => String(q).slice(0, 4)))].filter(Boolean);
+  return ys.map((y) => (I18N.lang === 'hr' ? `${y}.` : y)).join('–') || '–';
+}
+function ui_renderModelLine() {
+  const cal = CAL || {}, status = cal.status || 'uncalibrated';
+  const src = ui_res.today && ui_res.today.ga ? ui_res.today.ga.source : null;
+  let text;
+  if (!ui_aero) {
+    const gb = cal.gauss && Number.isFinite(cal.gauss.beta) ? cal.gauss.beta : NaN;
+    const c = !state.calibrated ? t('ui.model.raw') : Number.isFinite(gb) ? t('ui.model.gcal', { beta: fmt(gb, 2) }) : t('ui.model.uncal');
+    text = t('ui.model.approx', { cal: c });
+  } else {
+    const c = !state.calibrated ? t('ui.model.raw')
+      : status === 'calibrated' && Number.isFinite(cal.beta) ? t('ui.model.cal', { period: ui_calPeriod(), beta: fmt(cal.beta, 2) }) : t('ui.model.uncal');
+    const grid = src === 'lut' ? ui_gridLabel(LUT && LUT.meta && LUT.meta.grid) : ui_gridLabel(ui_X.TUNNEL && ui_X.TUNNEL.id);
+    const where = src === 'lut' ? t('ui.model.src.lut', { grid }) : src === 'field' ? t('ui.model.src.field', { grid }) : src ? t('ui.model.src.fallback') : '';
+    text = t('ui.model.lbm', { cal: c, src: where });
+  }
+  ui_setText('#model-text', text.trim());
+  const line = $('#model-line');
+  if (line) line.classList.toggle('warn', !ui_aero);
 }
 function ui_fillScenarioSelect() {
   const sel = $('#scenario');
@@ -2696,31 +2877,42 @@ function ui_init3D() {
 
 // ------------------------------------------------------------------ per-frame work
 let ui_lastSlice = 0;
+/*
+ * The slice of each view. Default: the local increment on the continuous linear scale of visuals.js INC_SCALES (the
+ * background is one number for the whole domain, so only the increment shows the street-scale structure); with
+ * "total", background + increment in the bands of CONC_SCALES. A stale field (the previous run, shown while the new
+ * one computes) is drawn paler, like the grey numbers.
+ */
 function ui_updateSlices() {
   const met = ui_res.today ? ui_res.today.met : ui_met();
+  const inc = state.sliceWhat === 'inc' && !!ui_X.INC_SCALES;
   for (const v of ui_views) {
     if (!v.slice) continue;
     const r = ui_res[v.id];
     const vf = state.slice ? ui_viewField(v.id, met) : null;
     let field = vf ? vf.field : null;
     if (vf && vf.approximate && Math.abs(state.sliceH - UI_POI_Y) > 1e-6) field = ui_fallbackField(met, state.sliceH);
-    const fn = r && field ? ui_valueFn(v.id, r.met, r.bg, state.pollutant, vf.approximate ? 'fallback' : 'field') : null;
-    const scale = ui_X.CONC_SCALES ? ui_X.CONC_SCALES[state.pollutant] : null;
+    const fn = r && field ? ui_valueFn(v.id, r.met, r.bg, state.pollutant, vf.approximate ? 'fallback' : 'field', inc) : null;
+    const scale = inc ? ui_X.INC_SCALES[state.pollutant] : ui_X.CONC_SCALES ? ui_X.CONC_SCALES[state.pollutant] : null;
     ui_try('visuals.ConcSlice.update', () => v.slice.update(field && fn ? field : null, fn || (() => 0), state.sliceH, state.slice && !!field && !!fn, scale));
+    if (typeof v.slice.setDim === 'function') ui_try('visuals.ConcSlice.setDim', () => v.slice.setDim(!!(vf && vf.stale && !vf.approximate)));
   }
+  ui_renderLegend();
 }
 function ui_frameUI(now) {
-  if (ui_dirty.model) { ui_dirty.model = false; ui_recomputeModel(); ui_renderCompare(); ui_renderViewCards(); ui_renderSources(); }
+  if (ui_dirty.model) { ui_dirty.model = false; ui_recomputeModel(); ui_renderCompare(); ui_renderViewCards(); ui_renderSources(); ui_renderModelLine(); ui_renderLegend(); }
   if (ui_dirty.points && now - ui_lastPoints > 150) { ui_dirty.points = false; ui_lastPoints = now; ui_recomputePoints(); ui_renderCompare(); }
   if (ui_dirty.slices && now - ui_lastSlice > 100) { ui_dirty.slices = false; ui_lastSlice = now; ui_updateSlices(); }
   if (ui_dirty.charts && !ui_chartTimer) {
     ui_chartTimer = setTimeout(() => {
       ui_chartTimer = 0; ui_dirty.charts = false;
-      ui_try('ui.hindcast', ui_renderHindcast); ui_try('ui.forecast', ui_renderForecast);
+      // charts in a closed group wait until it opens (the toggle handler invalidates them again)
+      if (ui_groupOpen('grp-val')) ui_try('ui.hindcast', ui_renderHindcast);
+      if (ui_groupOpen('grp-fc')) ui_try('ui.forecast', ui_renderForecast);
       if (ui_rose.model && ui_roseKey() !== ui_rose.key) ui_computeRose();
     }, 200);
   }
-  if (ui_dirty.data) { ui_dirty.data = false; ui_try('ui.data', ui_renderData); }
+  if (ui_dirty.data) { ui_dirty.data = false; if (ui_groupOpen('grp-data')) ui_try('ui.data', ui_renderData); }
 }
 let ui_chartTimer = 0;
 const ui_fwd = new THREE.Vector3();
@@ -2796,12 +2988,23 @@ function ui_render(dt) {
     R.setViewport(x, y, w, h);
     R.setScissor(x, y, w, h);
     R.render(S, v.cam);
-    if (v.labels) ui_try('visuals.LabelLayer.update', () => v.labels.update(v.cam, w, h));
+    if (v.labels) ui_try('visuals.LabelLayer.update', () => v.labels.update(v.cam, w, h, ui_blockers(v.el, r)));
   }
   R.setScissorTest(false);
   ui_master.getWorldDirection(ui_fwd);
   const north = $('#north svg');
   if (north) north.style.transform = `rotate(${-Math.atan2(ui_fwd.x, -ui_fwd.z) / DEG}deg)`;
+}
+
+/** Rectangles [x0, y0, x1, y1] in view pixels of the cards over a view (and the north arrow), for LabelLayer. */
+function ui_blockers(el, r) {
+  const out = [];
+  for (const c of [...el.querySelectorAll('.view-head, .view-stats'), $('#north')]) {
+    if (!c) continue;
+    const b = c.getBoundingClientRect();
+    if (b.width > 0 && b.height > 0 && b.right > r.left && b.left < r.right) out.push([b.left - r.left, b.top - r.top, b.right - r.left, b.bottom - r.top]);
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ boot
@@ -2848,6 +3051,7 @@ function ui_boot() {
   ui_renderLegend();
   ui_renderParticleLegend();
   ui_renderSweepNote();
+  ui_renderModelLine();
   if (UI_SWEEP_LUT) ui_startLutSweep();
   const loading = $('#loading');
   if (loading) loading.remove();
