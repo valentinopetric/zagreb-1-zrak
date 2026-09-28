@@ -1,11 +1,418 @@
 <title>Zrak na raskrižju · Zagreb-1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap">
 <style>
 {{STYLE}}
 </style>
+<!--
+  Markup for the app shell (owner: ui). Layout and patterns follow maksimir-pod-kisom by Ivan Rezić (MIT):
+  a 3D stage split into two views, and a 372 px side panel. Text is not written here: every element with
+  data-i18n="key" gets its text from the string tables in src/js/main.js (hr and en), and
+  data-i18n-attr="attr:key,attr2:key2" fills attributes. That keeps the two languages in one place.
+-->
 
 <div id="app">
-  <canvas id="gl"></canvas>
-  <p id="loading">placeholder page — owner [ui] replaces src/page.html</p>
+  <section id="stage" data-i18n-attr="aria-label:ui.stage.aria">
+    <canvas id="gl"></canvas>
+    <div class="views" id="views">
+      <div class="view" id="view-a" data-view="today">
+        <div class="labels" aria-hidden="true"></div>
+        <header class="view-head">
+          <h2 data-i18n="ui.view.today"></h2>
+          <p data-i18n="ui.view.today.desc"></p>
+          <div class="view-busy" data-for="today" hidden>
+            <span class="view-busy-text" role="status"></span><span class="view-busy-pct" aria-hidden="true"></span>
+            <span class="view-bar" role="progressbar" data-i18n-attr="aria-label:ui.busy.aria" aria-valuemin="0" aria-valuemax="100"><i></i></span>
+          </div>
+        </header>
+        <dl class="view-stats" data-for="today">
+          <div><dt data-k="totalLabel"></dt><dd class="big" data-k="total">&nbsp;</dd><dd class="sub" data-k="band">&nbsp;</dd></div>
+          <div><dt data-i18n="ui.stat.inc"></dt><dd class="big" data-k="inc">&nbsp;</dd><dd class="sub" data-k="incSub">&nbsp;</dd></div>
+        </dl>
+      </div>
+      <div class="view" id="view-b" data-view="scenario">
+        <div class="labels" aria-hidden="true"></div>
+        <header class="view-head">
+          <h2 id="scen-title" data-i18n="ui.view.scenario"></h2>
+          <p id="scen-desc"></p>
+          <div class="view-busy" data-for="scenario" hidden>
+            <span class="view-busy-text" role="status"></span><span class="view-busy-pct" aria-hidden="true"></span>
+            <span class="view-bar" role="progressbar" data-i18n-attr="aria-label:ui.busy.aria" aria-valuemin="0" aria-valuemax="100"><i></i></span>
+          </div>
+        </header>
+        <dl class="view-stats" data-for="scenario">
+          <div><dt data-k="totalLabel"></dt><dd class="big" data-k="total">&nbsp;</dd><dd class="sub" data-k="band">&nbsp;</dd></div>
+          <div><dt data-i18n="ui.stat.inc"></dt><dd class="big" data-k="inc">&nbsp;</dd><dd class="sub" data-k="incSub">&nbsp;</dd></div>
+        </dl>
+      </div>
+    </div>
+    <div class="north" id="north" data-i18n-attr="title:ui.north">
+      <svg viewBox="-20 -20 40 40" aria-hidden="true"><path d="M0 -15 L6 8 L0 4 L-6 8 Z"/></svg>
+      <span data-i18n="ui.north.short"></span>
+    </div>
+    <p class="stage-note" id="stage-note" role="status" hidden></p>
+    <p class="loading" id="loading" data-i18n="ui.loading">…</p>
+  </section>
+
+  <aside id="panel">
+    <!-- 1. Title, intro, language -->
+    <div class="title-block">
+      <div class="title-row">
+        <h1 data-i18n="ui.title"></h1>
+        <div class="segmented lang" role="group" data-i18n-attr="aria-label:ui.lang.aria">
+          <button type="button" data-lang="hr" lang="hr">HR</button>
+          <button type="button" data-lang="en" lang="en">EN</button>
+        </div>
+      </div>
+      <p data-i18n="ui.intro"></p>
+      <p class="mode-line" id="mode-line" role="status"></p>
+    </div>
+
+    <div class="notices" id="notices" aria-live="polite"></div>
+
+    <!-- 2. Now at the station -->
+    <section class="block" aria-labelledby="h-now" id="sec-now">
+      <h2 id="h-now" data-i18n="ui.now.h"></h2>
+      <div class="now-head">
+        <span class="eaqi-badge" id="now-badge" data-level="0">–</span>
+        <div>
+          <p class="now-time" id="now-time"></p>
+          <p class="hint" id="now-badge-note"></p>
+        </div>
+      </div>
+      <ul class="chips" id="now-chips" data-i18n-attr="aria-label:ui.now.chips.aria"></ul>
+      <p class="hint" id="now-wind"></p>
+      <p class="hint" id="now-bg"></p>
+      <p class="hint src" id="now-src"></p>
+      <button type="button" class="action" id="use-now" data-i18n="ui.now.use"></button>
+    </section>
+
+    <!-- 3. Presets -->
+    <section class="block" aria-labelledby="h-presets">
+      <h2 id="h-presets" data-i18n="ui.presets.h"></h2>
+      <div class="presets" role="group" data-i18n-attr="aria-label:ui.presets.h">
+        <button type="button" data-preset="winterRush" data-i18n="ui.preset.winterRush" aria-pressed="false"></button>
+        <button type="button" data-preset="summerPm" data-i18n="ui.preset.summerPm" aria-pressed="false"></button>
+        <button type="button" data-preset="sundayNight" data-i18n="ui.preset.sundayNight" aria-pressed="false"></button>
+        <button type="button" data-preset="ne" data-i18n="ui.preset.ne" aria-pressed="false"></button>
+        <button type="button" data-preset="sw" data-i18n="ui.preset.sw" aria-pressed="false"></button>
+        <button type="button" data-preset="now" data-i18n="ui.preset.now" aria-pressed="false"></button>
+        <button type="button" data-preset="fc24" data-i18n="ui.preset.fc24" aria-pressed="false"></button>
+      </div>
+      <p class="hint" id="preset-hint"></p>
+    </section>
+
+    <!-- 4. Weather and time -->
+    <section class="block" aria-labelledby="h-weather">
+      <h2 id="h-weather" data-i18n="ui.weather.h"></h2>
+      <div class="field">
+        <div class="field-row">
+          <label for="u10" data-i18n="ui.wind.speed"></label>
+          <output id="u10-out" for="u10"></output>
+        </div>
+        <input type="range" id="u10" min="0" max="8" step="0.1" value="1.7">
+        <p class="hint" id="u10-hint"></p>
+      </div>
+
+      <div class="field dial-field">
+        <div class="dial" id="dial" role="slider" tabindex="0" data-i18n-attr="aria-label:ui.dial.aria" aria-valuemin="0" aria-valuemax="337.5">
+          <svg viewBox="-60 -60 120 120" aria-hidden="true">
+            <circle class="dial-ring" r="46"/>
+            <g class="dial-ticks"></g>
+            <g class="dial-arrow"><line x1="0" y1="-40" x2="0" y2="30"/><path d="M0 40 L-7 26 L7 26 Z"/><circle cy="-40" r="4"/></g>
+          </svg>
+        </div>
+        <div>
+          <p class="dial-label" data-i18n="ui.dial.label"></p>
+          <p class="dial-value" id="dial-value"></p>
+          <p class="hint" data-i18n="ui.dial.hint"></p>
+        </div>
+      </div>
+
+      <div class="field two">
+        <div class="field">
+          <label class="field-label" for="stab" data-i18n="ui.stab.label"></label>
+          <select id="stab">
+            <option value="auto" data-i18n="ui.stab.auto"></option>
+            <option value="A" data-i18n="ui.stab.A"></option>
+            <option value="B" data-i18n="ui.stab.B"></option>
+            <option value="C" data-i18n="ui.stab.C"></option>
+            <option value="D" data-i18n="ui.stab.D"></option>
+            <option value="E" data-i18n="ui.stab.E"></option>
+            <option value="F" data-i18n="ui.stab.F"></option>
+          </select>
+        </div>
+        <div class="field">
+          <p class="field-label" id="lbl-lid" data-i18n="ui.lid.label"></p>
+          <div class="segmented" role="group" aria-labelledby="lbl-lid" data-group="lid">
+            <button type="button" data-value="auto" data-i18n="ui.lid.auto"></button>
+            <button type="button" data-value="100">100 m</button>
+            <button type="button" data-value="315">315 m</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint" id="stab-hint"></p>
+
+      <div class="field">
+        <div class="field-row">
+          <label for="date" data-i18n="ui.time.date"></label>
+          <input type="date" id="date">
+        </div>
+        <div class="field-row">
+          <label for="hour" data-i18n="ui.time.hour"></label>
+          <output id="hour-out" for="hour"></output>
+        </div>
+        <div class="hour-row">
+          <button type="button" class="step" id="hour-prev" data-i18n-attr="aria-label:ui.time.prev">−</button>
+          <input type="range" id="hour" min="1" max="24" step="1" value="12">
+          <button type="button" class="step" id="hour-next" data-i18n-attr="aria-label:ui.time.next">+</button>
+        </div>
+        <p class="hint" data-i18n="ui.time.hint"></p>
+        <p class="derived" id="daytype"></p>
+      </div>
+    </section>
+
+    <!-- 5. Traffic and sources -->
+    <section class="block" aria-labelledby="h-traffic">
+      <h2 id="h-traffic" data-i18n="ui.traffic.h"></h2>
+      <div class="field">
+        <div class="field-row"><label for="traffic" data-i18n="ui.traffic.all"></label><output id="traffic-out" for="traffic"></output></div>
+        <input type="range" id="traffic" min="0" max="150" step="5" value="100">
+      </div>
+      <div class="field">
+        <div class="field-row"><label for="trafficA" data-i18n="ui.traffic.A"></label><output id="trafficA-out" for="trafficA"></output></div>
+        <input type="range" id="trafficA" min="0" max="150" step="5" value="100">
+      </div>
+      <div class="field">
+        <div class="field-row"><label for="trafficB" data-i18n="ui.traffic.B"></label><output id="trafficB-out" for="trafficB"></output></div>
+        <input type="range" id="trafficB" min="0" max="150" step="5" value="100">
+      </div>
+      <p class="hint" id="traffic-hint"></p>
+      <label class="check"><input type="checkbox" id="congestion"> <span data-i18n="ui.traffic.congestion"></span></label>
+      <label class="check"><input type="checkbox" id="resusp"> <span data-i18n="ui.traffic.resusp"></span></label>
+      <div class="field two">
+        <div class="field">
+          <label class="field-label" for="heating" data-i18n="ui.heating.label"></label>
+          <select id="heating">
+            <option value="auto" data-i18n="ui.heating.auto"></option>
+            <option value="on" data-i18n="ui.heating.on"></option>
+            <option value="off" data-i18n="ui.heating.off"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="leaves" data-i18n="ui.leaves.label"></label>
+          <select id="leaves">
+            <option value="auto" data-i18n="ui.leaves.auto"></option>
+            <option value="on" data-i18n="ui.leaves.on"></option>
+            <option value="off" data-i18n="ui.leaves.off"></option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="bgsrc" data-i18n="ui.bg.label"></label>
+        <select id="bgsrc">
+          <option value="auto" data-i18n="ui.bg.auto"></option>
+          <option value="z4" data-i18n="ui.bg.z4"></option>
+          <option value="cams" data-i18n="ui.bg.cams"></option>
+          <option value="clim" data-i18n="ui.bg.clim"></option>
+        </select>
+      </div>
+      <p class="hint" id="sources-hint"></p>
+    </section>
+
+    <!-- 6. Scenario -->
+    <section class="block" aria-labelledby="h-scen">
+      <h2 id="h-scen" data-i18n="ui.scen.h"></h2>
+      <div class="field">
+        <label class="field-label" for="scenario" data-i18n="ui.scen.geo"></label>
+        <select id="scenario"></select>
+        <p class="hint" id="scenario-desc"></p>
+      </div>
+      <fieldset class="custom-box" id="custom-box" hidden>
+        <legend data-i18n="ui.custom.h"></legend>
+        <button type="button" class="action ghost" id="place" aria-pressed="false" data-i18n="ui.custom.place"></button>
+        <p class="hint" id="place-hint"></p>
+        <div class="field"><div class="field-row"><label for="cw" data-i18n="ui.custom.w"></label><output id="cw-out" for="cw"></output></div><input type="range" id="cw" min="10" max="120" step="1" value="40"></div>
+        <div class="field"><div class="field-row"><label for="cd" data-i18n="ui.custom.d"></label><output id="cd-out" for="cd"></output></div><input type="range" id="cd" min="10" max="120" step="1" value="24"></div>
+        <div class="field"><div class="field-row"><label for="ch" data-i18n="ui.custom.hgt"></label><output id="ch-out" for="ch"></output></div><input type="range" id="ch" min="3" max="100" step="1" value="25"></div>
+        <div class="field"><div class="field-row"><label for="cr" data-i18n="ui.custom.rot"></label><output id="cr-out" for="cr"></output></div><input type="range" id="cr" min="0" max="175" step="5" value="0"></div>
+      </fieldset>
+      <p class="field-label" data-i18n="ui.measures.h"></p>
+      <label class="check"><input type="checkbox" id="lez"> <span data-i18n="ui.measures.lez"></span></label>
+      <div class="field">
+        <div class="field-row"><label for="ev" data-i18n="ui.measures.ev"></label><output id="ev-out" for="ev"></output></div>
+        <input type="range" id="ev" min="0" max="100" step="5" value="0">
+      </div>
+      <label class="check"><input type="checkbox" id="ebus"> <span data-i18n="ui.measures.ebus"></span></label>
+      <label class="check"><input type="checkbox" id="carfree"> <span data-i18n="ui.measures.carfree"></span></label>
+      <div class="field">
+        <div class="field-row"><label for="dtraffic" data-i18n="ui.measures.dtraffic"></label><output id="dtraffic-out" for="dtraffic"></output></div>
+        <input type="range" id="dtraffic" min="-50" max="30" step="5" value="0">
+      </div>
+      <p class="hint" data-i18n="ui.measures.hint"></p>
+    </section>
+
+    <!-- 7. Pollutant -->
+    <section class="block" aria-labelledby="h-pol">
+      <h2 id="h-pol" data-i18n="ui.pol.h"></h2>
+      <div class="segmented wrap" role="group" data-i18n-attr="aria-label:ui.pol.h" data-group="pollutant">
+        <button type="button" data-value="no2">NO₂</button>
+        <button type="button" data-value="nox">NOₓ</button>
+        <button type="button" data-value="pm10">PM₁₀</button>
+        <button type="button" data-value="pm25">PM₂.₅</button>
+        <button type="button" data-value="co">CO</button>
+        <button type="button" data-value="c6h6" data-i18n="ui.pol.c6h6"></button>
+      </div>
+      <p class="hint" id="pol-hint"></p>
+      <div class="field">
+        <p class="field-label" id="lbl-index" data-i18n="ui.index.label"></p>
+        <div class="segmented" role="group" aria-labelledby="lbl-index" data-group="index">
+          <button type="button" data-value="eea" data-i18n="ui.index.eea"></button>
+          <button type="button" data-value="iszz" data-i18n="ui.index.iszz"></button>
+        </div>
+        <p class="hint" data-i18n="ui.index.hint"></p>
+      </div>
+    </section>
+
+    <!-- 8. Comparison -->
+    <section class="block" aria-labelledby="h-compare">
+      <h2 id="h-compare" data-i18n="ui.cmp.h"></h2>
+      <table class="compare" id="cmp-table">
+        <thead><tr><th scope="col"><span class="sr" data-i18n="ui.cmp.measure"></span></th><th scope="col" data-i18n="ui.view.today.short"></th><th scope="col" data-i18n="ui.view.scenario.short"></th></tr></thead>
+        <tbody>
+          <tr><th scope="row" id="cmp-total-h"></th><td data-c="today.total"></td><td data-c="scenario.total"></td></tr>
+          <tr><th scope="row" id="cmp-inc-h"></th><td data-c="today.inc"></td><td data-c="scenario.inc"></td></tr>
+          <tr><th scope="row" id="cmp-bg-h"></th><td data-c="today.bg"></td><td data-c="scenario.bg"></td></tr>
+          <tr><th scope="row" id="cmp-poi-h"></th><td data-c="today.poi"></td><td data-c="scenario.poi"></td></tr>
+          <tr><th scope="row" id="cmp-share-h"></th><td data-c="today.share"></td><td data-c="scenario.share"></td></tr>
+        </tbody>
+      </table>
+      <div class="field-row small">
+        <label for="band-level" data-i18n="ui.cmp.bandLevel"></label>
+        <select id="band-level">
+          <option value="2"></option><option value="3"></option><option value="4"></option><option value="5"></option><option value="6"></option>
+        </select>
+      </div>
+      <p class="chart-title" data-i18n="ui.cmp.attr"></p>
+      <div id="attr-chart"></div>
+      <p class="hint" id="cmp-note"></p>
+      <p class="busy" id="busy" role="status" hidden></p>
+    </section>
+
+    <!-- 9. Model vs measurements -->
+    <section class="block" aria-labelledby="h-val">
+      <h2 id="h-val" data-i18n="ui.val.h"></h2>
+      <p class="chart-title" id="hind-title"></p>
+      <div id="hind-chart"></div>
+      <p class="hint" id="hind-note"></p>
+
+      <button type="button" class="action" id="sweep" data-i18n="ui.sweep.btn"></button>
+      <p class="hint" id="sweep-note"></p>
+      <div class="sweep" id="sweep-box" hidden>
+        <p class="chart-title" id="rose-title"></p>
+        <div id="rose-chart"></div>
+        <p class="hint" id="rose-note"></p>
+      </div>
+
+      <h3 data-i18n="ui.cal.h"></h3>
+      <p class="answer" id="cal-status"></p>
+      <div class="field">
+        <p class="field-label" id="lbl-calib" data-i18n="ui.cal.toggle"></p>
+        <div class="segmented" role="group" aria-labelledby="lbl-calib" data-group="calib">
+          <button type="button" data-value="cal" data-i18n="ui.cal.calibrated"></button>
+          <button type="button" data-value="raw" data-i18n="ui.cal.raw"></button>
+        </div>
+      </div>
+      <div class="table-scroll"><table class="compare metrics" id="cal-table"></table></div>
+      <p class="hint" id="cal-note"></p>
+      <h3 data-i18n="ui.lut.h"></h3>
+      <p class="hint" id="lut-status"></p>
+      <button type="button" class="action ghost" id="export-lut" data-i18n="ui.lut.export"></button>
+    </section>
+
+    <!-- 10. Forecast -->
+    <section class="block" aria-labelledby="h-fc">
+      <h2 id="h-fc" data-i18n="ui.fc.h"></h2>
+      <p class="chart-title" id="fc-title"></p>
+      <div id="fc-chart"></div>
+      <p class="hint" id="fc-note"></p>
+      <button type="button" class="action ghost" id="fc-load" data-i18n="ui.fc.load"></button>
+    </section>
+
+    <!-- 11. Data -->
+    <section class="block" aria-labelledby="h-data">
+      <h2 id="h-data" data-i18n="ui.data.h"></h2>
+      <div class="segmented wrap" role="group" data-i18n-attr="aria-label:ui.data.view" data-group="dataView">
+        <button type="button" data-value="diurnal" data-i18n="ui.data.diurnal"></button>
+        <button type="button" data-value="monthly" data-i18n="ui.data.monthly"></button>
+        <button type="button" data-value="annual" data-i18n="ui.data.annual"></button>
+        <button type="button" data-value="rose" data-i18n="ui.data.rose"></button>
+      </div>
+      <p class="chart-title" id="data-title"></p>
+      <div id="data-chart"></div>
+      <p class="hint" id="data-note"></p>
+      <p class="chart-title" data-i18n="ui.data.exceed"></p>
+      <div class="table-scroll"><table class="compare" id="exceed-table"></table></div>
+      <p class="hint" id="data-period"></p>
+    </section>
+
+    <!-- 12. Display -->
+    <section class="block" aria-labelledby="h-view">
+      <h2 id="h-view" data-i18n="ui.disp.h"></h2>
+      <div class="field" id="slice-field">
+        <label class="check"><input type="checkbox" id="slice" checked> <span data-i18n="ui.disp.slice"></span></label>
+        <div class="field-row"><label for="slice-h" data-i18n="ui.disp.sliceH"></label><output id="slice-out" for="slice-h"></output></div>
+        <input type="range" id="slice-h" min="1.5" max="40" step="0.5" value="4">
+        <p class="field-label small-label" id="lbl-palette" data-i18n="ui.disp.palette"></p>
+        <div class="segmented" role="group" aria-labelledby="lbl-palette" data-group="palette">
+          <button type="button" data-value="cb" data-i18n="ui.disp.palette.cb"></button>
+          <button type="button" data-value="eaqi" data-i18n="ui.disp.palette.eaqi"></button>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="particles" checked> <span data-i18n="ui.disp.particles"></span></label>
+      <div class="legend" id="particle-legend" hidden></div>
+      <label class="check"><input type="checkbox" id="streaks"> <span data-i18n="ui.disp.streaks"></span></label>
+      <label class="check"><input type="checkbox" id="xray"> <span data-i18n="ui.disp.xray"></span></label>
+      <label class="check"><input type="checkbox" id="lod2"> <span data-i18n="ui.disp.lod2"></span></label>
+      <div class="field">
+        <p class="field-label" id="lbl-bcol" data-i18n="ui.disp.bcol"></p>
+        <div class="segmented" role="group" aria-labelledby="lbl-bcol" data-group="bcol">
+          <button type="button" data-value="plain" data-i18n="ui.disp.bcol.plain"></button>
+          <button type="button" data-value="year" data-i18n="ui.disp.bcol.year"></button>
+          <button type="button" data-value="height" data-i18n="ui.disp.bcol.height"></button>
+        </div>
+        <p class="hint" id="bcol-hint"></p>
+      </div>
+      <div class="field">
+        <p class="field-label" id="lbl-cam" data-i18n="ui.cam.label"></p>
+        <div class="cams" role="group" aria-labelledby="lbl-cam">
+          <button type="button" data-cam="air" data-i18n="ui.cam.air"></button>
+          <button type="button" data-cam="station" data-i18n="ui.cam.station"></button>
+          <button type="button" data-cam="vukovarska" data-i18n="ui.cam.vukovarska"></button>
+          <button type="button" data-cam="plan" data-i18n="ui.cam.plan"></button>
+        </div>
+      </div>
+      <div class="field">
+        <p class="field-label" id="lbl-split" data-i18n="ui.split.label"></p>
+        <div class="segmented" role="group" aria-labelledby="lbl-split" data-group="split">
+          <button type="button" data-value="split" data-i18n="ui.split.split"></button>
+          <button type="button" data-value="today" data-i18n="ui.view.today.short"></button>
+          <button type="button" data-value="scenario" data-i18n="ui.view.scenario.short"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. Footer -->
+    <footer class="notes">
+      <p id="method-note"></p>
+      <p><span data-i18n="ui.foot.limits.pre"></span> <a href="docs/09-limitations.md" data-i18n="ui.foot.limits"></a></p>
+      <p data-i18n="ui.foot.notofficial"></p>
+      <ul class="attrib" id="attrib"></ul>
+      <p data-i18n="ui.foot.credit"></p>
+    </footer>
+  </aside>
 </div>
 
 <script type="application/json" id="site-data">{{SITE}}</script>

@@ -127,6 +127,20 @@ earlier files only at call time. Consequences:
 
 Coordinates are rounded to 0.1 m. Target size is under 1.5 MB.
 
+As implemented (tools/build_env.py, docs/02-geometry.md; integration review 2026-09-28):
+
+- `buildings[].p` is one ring per part. A courtyard is joined to its outer ring by a zero-width bridge (a "keyhole"
+  ring with non-consecutive duplicate vertices). Even-odd fills, `pointInPoly`, the voxeliser and `THREE.Shape`
+  handle it; code that offsets or outlines rings sees a double edge along each bridge.
+- `heating[].w` is relative to the heating area: its area-weighted mean over all heating polygons is 1 (range
+  0.22–2.5, capped at 3), so q_D is the mean areal rate over the heating area. The polygons are 50 m tiles clipped
+  to `landuse=residential`.
+- Group B also holds "Miramarski podvožnjak" (the southbound underpass of Miramarska N). The two orthophoto-checked
+  carriageways at |z| ≤ 40 m (critic §1.6) are ordinary `roads` entries whose `w` is the measured width.
+- Non-motor ways (`c` = 5) have `l` = 0 and a display width `w`. Trees carry `k` = `"osm"` or `"station"`
+  (no `"chm"` trees); the station tree is in `trees[]` and in `station.tree` (city.js de-duplicates).
+- `meta` also has `extent`, `notes` and more detail under `sources`; `morph.sectors[]` also carry `lambda_p`, `lambda_f`.
+
 `lod2.bin` (optional, geo-data writes it, scene reads it) is little-endian:
 
 - header: 16 bytes = magic `ZL2B`, `uint32` version = 1, `uint32` nTri, `uint32` 0;
@@ -166,6 +180,18 @@ Radius is 500 m. Budget is about 2.5 MB.
 The app decodes it with `Hist` (data.js). Tools keep the full 2023–present hourly tables in
 `data/processed/*.csv.gz` for calibration.
 
+As implemented (tools/build_measurements.py, docs/01-data-sources.md), fields a decoder may ignore are added:
+`meta.time`, `meta.missing`, `meta.units` (per key, including `inc.*`), `meta.validated_until` (last validated
+timestamp per ISZZ key, null for raw-only; the UI draws raw and validated data differently), `meta.sources`;
+`stats.rose[k].calm {mean, n}` and `u_min` = 0.5 m/s, `stats.rose['ifs.u10']` (the wind rose), `stats.coverage_by_year`,
+`stats.exceed_n`, `stats.exceed.pm10_24h_50_ref` / `pm10_24h_45_ref` (gravimetric reference method, the official
+count), `stats.increment_year`, `stats.ytd {year, through, mean, coverage}`. Definitions: `annual` holds complete
+calendar years only (≥ 75 % of hours; the running year is in `ytd`); wind-direction keys are left out of the means;
+roses bin by the IFS direction and count hours with IFS U10 < 0.5 m/s as calm; a 24 h exceedance needs ≥ 18 valid
+hours per local day; `increment` pairs each parameter on its own hours. `data/processed/` also holds
+`iszz_pm10_gravimetric.csv` and `ifs_hourly.meta.json`; the IFS boundary-layer height is missing before 2024-09-01
+and for 493 h in September–October 2025 (meteo.js then uses the class median BLH).
+
 ### 4.3 `calibration.json` (models, `tools/calibrate.py`)
 
 ```jsonc
@@ -180,6 +206,15 @@ The app decodes it with `Hist` (data.js). Tools keep the full 2023–present hou
   "notes": "..." }
 ```
 
+As implemented (tools/calibrate.py, docs/07-calibration.md): `status` is `"calibrated"` with `model: "lbm"` once a
+receptor LUT exists (the top level is then the LBM fit), `"fallback-only"` with `model: "gauss"` before. Both `gauss`
+and `lbm` (null without a LUT) carry `{beta, U0, U0_at_bound, n, metrics_test, metrics_lomo, baseline_test,
+baseline_lomo, raw_physics_test, folds, lomo_params, totals_test, mean_obs, mean_mod_raw, by_sector, by_hour,
+by_class, by_speed, by_month, by_daytype, baseline_diag}`; `lbm` also has `lut_meta`. Top-level additions:
+`baseline`, `congestion_share`, `chemistry_check`, `inputs`, `generated_utc`. β is fitted on the LUT's grid
+(`lbm.lut_meta.grid`), so live fields on another grid do not replace the LUT (model.js, §6.1).
+tools/build.py `DEFAULT_CAL` is used only when calibration.json is missing.
+
 ### 4.4 `lut_receptor.json` (flow, via `tools/export_lut.py` → the app's `?sweep=lut` mode)
 
 ```jsonc
@@ -193,6 +228,12 @@ The app decodes it with `Hist` (data.js). Tools keep the full 2023–present hou
 ```
 
 When `LUT` is null, `model.js` falls back to `FallbackModel` receptor values, labelled "approximate".
+
+As implemented (aero.js `exportLUT`, tools/export_lut.py): `age` is the raw age tracer A_k (units of Γ_k × m), and
+model.js computes τ = Σ q_k A_k / (U_eff Σ q_k Γ_k) in seconds. `meta` also has `complete`, `missing`, `status`,
+`code`, `code_hash` (aero.js `aero_codeHash()`, from exports after 2026-09-28), `geometry_hash`, `env_generated_utc`, `leaves` (the tree state it was computed with), `spinup`, `lbm`,
+`inflow`, `stab` (the representative class and lid per group), `receptor`, `mast_heights_m` and `timing`.
+`tools/export_lut.py --check` validates a file against this schema.
 
 ## 5. Physics contract (summary; the full spec is `docs/research/physics.md` with the critic's §4 corrections)
 
@@ -217,8 +258,21 @@ Reference LBM D3Q19 (D3Q15 fallback) with Smagorinsky: C_s = 0.17, τ0 = 0.506, 
 - **New in this repo:** the surrounding buildings and trees are voxelised. In the reference only
   the stadiums were.
 - The output is a `WindField` in the reference format: `data[(z*ny+y)*nx+x)*4] = (u, v, w, |u|)` as
-  fractions of U10 in tunnel axes, plus `mask` (a Uint8Array grid: 255 solid, 1–254 porous, 0 fluid)
+  fractions of U10 in tunnel axes, plus `mask` (a Uint8Array grid: 255 solid, 1–249 porous, 0 fluid)
   and `frame`.
+
+As implemented (wind-tunnel.js, voxel.js, docs/03-flow-lbm.md):
+
+- `tunnelGrid()` also returns `id` (e.g. `"120x120x32@5m"`, the grid id every cache, the LUT and model.js compare)
+  and `ft` (steps per flow-through); `warm` and `avg` are given in flow-throughs. `SPINUP` is twice the fine cell
+  (20 m when the fine grid is 10 m).
+- `inflowProfile(10)` is 0.357, not 1: the urban log law is matched to U10 at the blending height z_b = 80 m over the
+  NWP roughness z0r = 0.3 m (physics §6.2, critic §4.4). The NWP profile itself is 1 at 10 m.
+- Mask bytes: voxel.js writes 255 for solid cells and caps porous cells at 249; the LBM treats byte/255 > 0.99 as
+  solid, WindField and the scalar solver ≥ 250, so the three agree.
+- `WindTunnel.flow()` holds Σ over samples of the lattice velocity (porous cells already divided by
+  1 − 1.2·m in the acc pass) in `avg.xyz` and Σ|u| in `avg.w`; û = avg.xyz / (samples · uLattice).
+  `ScalarSolver.flowFromField()` gives the same shape from a WindField with samples = uLattice = 1.
 
 ### 5.3 Scalar
 
@@ -238,6 +292,12 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
     go in the layer containing roof level of the low-rise buildings (default 8 m).
 - Stability enters through the K field (Monin–Obukhov part, per group `AC`, `D`, `EF`), not through
   the flow (v1 flow is neutral). The ScalarSolver takes a `turb` object (§6.2).
+- Each group is solved with one representative class and lid (aero.js `AERO_STAB`, the group's most frequent IFS
+  2025 class and that class's median BLH, floored at h_min): AC → B with 520 m, D → D with 135 m, EF → F with
+  100 m. The UI's lid control is therefore display-only (the Aero key has no lid).
+- Sources in the last 100 m before the outlet (the LBM sponge, physics §5.3) are dropped by both
+  `rasterizeSources` and the solver; a source in a solid cell moves to the first open cell above it. On the 10 m
+  grid the 8 m heating layer is the ground layer, which is one reason Γ_D differs 3× between 10 m and 5 m.
 
 ## 6. JavaScript interfaces
 
@@ -277,6 +337,27 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 **fallback.js**
 - `class FallbackModel { constructor(env); receptor(dirDeg, cls) → {gamma:[4], age:[4]}; slice(dirDeg, cls, height, grid{x0,z0,dx,nx,nz}) → Float32Array(nx*nz*4) }`. Gaussian line source with Briggs urban σ plus OSPM-type receptor term (physics §9). Γ uses the same units and normalisation as the scalar solver, so everything downstream is identical.
 
+**As implemented in the pure modules** (docs/05–07; integration review 2026-09-28):
+- Measures are **percent**: `evShare` 0–100, `trafficPct`, `trafficA`, `trafficB` with 100 = today.
+  `groupStrengths` opts: `heating: true | 'auto' | false` ('auto' = October–March), `ef` (EF overrides),
+  `heatingScale`, `congestionShare {A, B}`.
+- `concentrations()` returns CO in mg/m³ and expects background CO in mg/m³; temperature is `met.t2` (not `met.t`,
+  which the UI uses for the time); extra outputs `band` and `meta {source, coverage, cls, group, uEff, beta, U0,
+  status, …}`. A missing background value uses `MOD_BG_DEFAULT` (ZAGREB-4 2025 means).
+- `ReceptorModel`: also `shared()`, `clearFields(scenario?)`, `hasField()`, `lutGrid`. `gammaAt(dir, u10, cls,
+  scenario = 'today')` also returns `band, queue, coverage, parts, group`. `setField` records the field's grid id
+  (`field.grid` or `field.T.id`). **Grid rule:** a live field replaces the LUT only on the LUT's grid (or when either
+  grid is unknown, or there is no LUT); a scenario field on another grid is carried onto the LUT as a relative change
+  against the same-grid 'today' field (`mod_deltaOnLut`), because β is fitted on the LUT's grid (Γ changes by up to
+  3× between 10 m and 5 m).
+- `increment(ga, q, u10, cal?, calibrated = true)`: without `cal` each source part gets its own calibration
+  (`mod_calFor`: the Gaussian β is never applied to 3D values).
+- Further public helpers: `thresholdLines()`, `EAQI_BANDS_ISZZ`, `eaqi(p, v, avg, scheme = 'eea2024' | 'iszz')`,
+  `sliceContext()`, `mqi()`, `MOST`, `EM_MEASURES_TODAY`, `CHEM_TAU_DEFAULT`, `MOD_BG_DEFAULT`, `met_localParts`,
+  `directionWeights(from, u10, dirs = DIRS16)`; `turbParams` also returns `group, invL, z0r, zb` (invL = 0 for
+  neutral); `FallbackModel(env, {radius, spacing, heatCell, receptor, hMin})`, `receptor()` also returns
+  `queue, canyon, n`, `slice()` samples cell centres, `sliceAsync()`.
+
 ### 6.2 GPU physics [flow] + [scalar]
 
 **voxel.js** [flow]
@@ -303,6 +384,23 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 - Caches: an in-memory LRU of 16 entries. IndexedDB persistence of receptor values and fields is optional and must tolerate an empty or blocked store (try/catch).
 - `?sweep=lut` mode: once booted, compute all 16 dirs × 3 classes for 'today' and put `exportLUT()` on `window.__lut`, which `tools/export_lut.py` collects.
 
+**As implemented in the GPU modules** (docs/03, docs/04):
+- `voxelize()` also returns `stats`; `rasterizeSources(geo, frame, T, {outletGap = 100})`. Public helpers:
+  `vox_worldToTunnel`, `vox_tunnelToWorld`, `vox_envGeometry`, `vox_geoHash`, `VOX`, `INFLOW`, `INFLOW_K`,
+  `inflowConstants`, `WT_RENDERER`, `WT_RUN`, `WT_CENTER`, `WT_FINE_DX`.
+- `new WindTunnel(T, S?, {profile})`, `begin(geo, from, seed?, {center, voxels})`, `dispose()`; `flow()` also returns
+  `T, frame, grid (Uint8Array mask), from`. WindField also carries `T, samples, uLattice`.
+- `ScalarSolver`: static `supported`, getters `sweeps`, `progress`, `readVK()`, `dispose()`; `begin()` opts `grid,
+  wallDist, lidK, probes, seed, tvd, keepFlow` plus any solver parameter. It must draw with the same WebGL context as
+  the tunnel (`sc_renderer()`: scene.js `renderer`, else `WT_RENDERER`). `ScalarField.receptor()` also returns
+  `inside`; `slice(h)` returns `{nx, ny, dx, h, frame, data, solid}` with **8 values per column** (Γ_A..D, A_A..D);
+  `stats` holds `{sweeps, converged, reason, residual, mass[4], massErr, massWithinTol, divergence, …}`; `describe()`.
+- `Aero({onResult(res, kind), onProgress, onFlow, geometry, T, S, maxEntries, persist, turbFor})`; `res` also has
+  `mast, grid, hash, turb, timing`; a receptor-only sweep job answered from the receptor store (this session or
+  IndexedDB) is delivered with `wind = conc = null, stored: true`. Methods `invalidate(scenario?)`, `sweepLUT(opts)`,
+  `label(job)`, `dispose()`, getter `available`. Job stages `'wait' | 'spinup' | 'fine' | 'scalar' | 'read'`.
+  `sweepLUT` publishes `window.__lutProgress` and `window.__lut`; `window.__z1_startLUT()` starts one if main.js did not.
+
 ### 6.3 Scene [scene] (scene.js, city.js, visuals.js)
 
 - scene.js: `renderer`, `canvas`, `scene`, `sun`, `hemi`, `sky`, `skyUniforms`, `M` (materials), `flatGeometry`, `ribbonGeometry`, `addMesh`, `timeUniform`, `setDaylight(dateUTC, cloud)` (sun position from `solarElevation`).
@@ -320,6 +418,16 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
   - `class WindStreaks` (port)
   - `class LabelLayer` (port)
   - `concColor(value, scale, out)` · `CONC_SCALES[pollutant]` (break points from EAQI bands) · `legendHTML(pollutant)`
+- As implemented (docs/12-rendering.md): city.js also exports `cityView(id)` (call before drawing each view),
+  `setXray(on)`, `async setLod2(on) → bool`, `decodeLod2(src)`, `buildingLegendHTML(mode)`, `CITY_SOURCE_GROUPS`;
+  `buildCity()` also returns `treesRoot` and `overlays.sources`; `cityGeometry().trees[]` carry the crown base `cb`
+  (voxel.js reads it) and prisms keep the ZG3D year as `year` (`s` is the solid fraction); scenario layers list what
+  they hide in `userData.hide` (alias `hides`) and their labels in `userData.labels`; `Bus 'city:changed'` fires on
+  `setCustomBlock` and `setLeaves`. visuals.js also exports `concBand`, `setConcPalette('cb' | 'eaqi')`,
+  `particleLegendHTML()`, `ConcSlice.gridField(grid, data, stride)`, `Particles.setStrengths({A, B, C, D})` and
+  `LabelLayer.addAll/remove/clear/relabel`; `LabelLayer.update` hides labels that would overlap a label of higher
+  priority (station, scenario, road, park, water, POI). `Particles.update` and `WindStreaks.update` take
+  `(dt, windField, u10, visible)`; `new WindStreaks(parent)`.
 
 ### 6.4 UI [ui] (page.html, style.css, data.js, charts.js, main.js)
 
@@ -340,6 +448,14 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 - main.js: `state`, UI binding, views, cameras, boot, frame loop. It must:
   - set `window.__z1 = {ready, fields, receptor, errors, state}`. `ready` is true after boot. `fields` counts completed Aero results. `receptor` is the latest modelled total at the station for the selected pollutant (a number).
   - **not** boot when `SELFTEST` is true (tests run on the same page).
+- As implemented (docs/08-user-guide.md): data.js also exports `ZgTime` (Europe/Zagreb clock: `offset, parts,
+  toUTC, hourStart, dayType, floor/ceil, currentHourEnding, iszzDate, isoLocalDate`), `Hist.create(meas)` and the test
+  hooks `Live._setFetch`, `Live._parse*`, `Live.biasRatios`, `Live.status`. main.js calls `Live.forecast()` with
+  3 past and 4 forecast days (the 72 h hindcast and forecast both fit) and `Live.cams()` with 14 past days (bias
+  ratio). `barChart` also has `mode: 'stack'`. URL parameters: `lang=hr|en`, `grid=coarse|fine`, `live=0` (archive
+  only, deterministic), `debug` (internals on `window.__z1dbg`), `sweep=lut`, and for dist/test.html `selftest`,
+  `only=`, `skip-slow`. On a software renderer the 3D is redrawn at most every 1.5 s while Aero is busy (every 10 s
+  under `?sweep=lut`), because drawing starves the LBM (measured ~80× faster without drawing).
 
 ## 7. Conventions
 
@@ -371,6 +487,7 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 | Scalar solver verification | `src/js/tests/scalar.test.js` | T1 analytic line source, T2 mass, T5 symmetry, T6 linearity (small synthetic grids). T3/T4 are `slow` |
 | Flow + voxeliser | `src/js/tests/flow.test.js` | voxeliser against analytic prism volumes, frame round-trip, LBM uniform-flow sanity, source-raster length conservation |
 | Scene/UI | `src/js/tests/ui.test.js` + `tests/browser/smoke.py` | boot, first field, no page errors, screenshot |
+| End to end | `tests/browser/e2e.py` (`make e2e`) | today's field and one geometry scenario's field, finite station values in both views, scenario coverage > 0, no page or app errors, no horizontal scroll at 390 px, screenshots at 1440×900 and 390×844 |
 
 ## 9. Documentation chapters (docs/)
 
@@ -385,6 +502,7 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 | `06-chemistry.md` | models | NO–NO₂–O₃, background, thresholds, EAQI |
 | `07-calibration.md` | models | Protocol, metrics, results (auto from calibration.json), baseline |
 | `08-user-guide.md` | ui | Every control explained, with screenshots |
+| `12-rendering.md` | scene | Renderer, materials, city meshes, scenarios, colour scales, slice, particles, labels |
 | `09-limitations.md` | lead | Honest list |
 | `10-runbook.md` | lead | Refresh data, recalibrate, export the LUT, build, deploy, troubleshoot |
 | `11-process.md` | lead | The step-by-step process by which this repo was researched and built |

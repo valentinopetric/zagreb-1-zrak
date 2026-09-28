@@ -1,0 +1,97 @@
+# Weekly refresh of the measurement snapshot baked into the page (docs/01-data-sources.md §8).
+#
+#   ISZZ (ZAGREB-1 + ZAGREB-4, incremental)  -> data/processed/iszz_hourly.csv.gz, iszz_completeness.json,
+#                                               iszz_pm10_gravimetric.csv
+#   Open-Meteo ECMWF IFS archive             -> data/processed/ifs_hourly.csv.gz, ifs_hourly.meta.json
+#   tools/build_measurements.py              -> src/data/measurements.json
+#   tools/build.py                           -> dist/ (checks that the page still builds; dist/ is not committed)
+#
+# Politeness: there is no API key. The ISZZ export limiter allows about one request per second per IP and answers
+# 429 without Retry-After (iszz-api §7), so tools/fetch_iszz.py runs alone, paced at 1.1 s. data/cache/ is not in
+# git, so on this fresh checkout the fetcher rebuilds every final chunk from the committed processed table and its
+# manifest and downloads only what is not final: about 48 hourly chunks + 5 gravimetric requests per week, inside
+# the <= 60 requests of critic §4.9. Open-Meteo costs 4 archive requests (free tier: < 10 000 calls/day).
+#
+# Commits made with GITHUB_TOKEN do not trigger other workflows (except workflow_dispatch), so when a Pages
+# workflow exists it is dispatched explicitly after a data commit.
+name: Refresh data
+
+on:
+  schedule:
+    # Mondays 04:37 UTC (06:37 CEST / 05:37 CET): the weekend's raw hours are in, the minute avoids the :00 rush.
+    - cron: "37 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "incremental (default), refresh-validated (re-read the last 2 validated years) or full (everything, ~25 min)"
+        type: choice
+        options: [incremental, refresh-validated, full]
+        default: incremental
+
+permissions:
+  contents: write   # commit the refreshed data
+  actions: write    # dispatch the Pages workflow after a data commit
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: "1"
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests of the measurement pipeline (saved fixtures, no network)
+        run: python3 -m unittest discover -s tests/python -p 'test_iszz.py'
+
+      - name: Fetch ISZZ (ZAGREB-1, ZAGREB-4)
+        run: |
+          case "${{ github.event.inputs.mode || 'incremental' }}" in
+            full)              python3 tools/fetch_iszz.py --full ;;
+            refresh-validated) python3 tools/fetch_iszz.py --refresh-validated ;;
+            *)                 python3 tools/fetch_iszz.py ;;
+          esac
+
+      - name: Fetch Open-Meteo ECMWF IFS archive
+        run: python3 tools/fetch_meteo.py
+
+      - name: Build src/data/measurements.json
+        run: python3 tools/build_measurements.py
+
+      - name: Build the page (sanity check)
+        run: python3 tools/build.py
+
+      - name: Commit if the data changed
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/measurements.json data/processed
+          if git diff --cached --quiet; then
+            echo "No data changes."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "data: weekly ISZZ + ECMWF IFS refresh ($(date -u +%Y-%m-%d))"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Redeploy the page
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f .github/workflows/pages.yml ]; then
+            gh workflow run pages.yml --ref "${GITHUB_REF_NAME}"
+          else
+            echo "No .github/workflows/pages.yml; nothing to dispatch."
+          fi

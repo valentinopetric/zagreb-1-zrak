@@ -1,7 +1,7 @@
 # Zrak na raskrižju / Air at the crossroads — common tasks. Everything is plain Python 3 (stdlib).
 PY ?= python3
 
-.PHONY: all data geometry measurements lut calibrate build test test-py selftest smoke serve clean
+.PHONY: all data geometry measurements lut calibrate build test test-py selftest smoke e2e serve clean
 
 all: build
 
@@ -44,6 +44,10 @@ selftest:
 
 smoke:
 	$(PY) tests/browser/smoke.py
+
+## Today + one geometry scenario end to end, both views, 1440×900 and 390×844 screenshots (dist/e2e_*.png)
+e2e:
+	$(PY) tests/browser/e2e.py --query "grid=coarse&live=0"
 
 clean:
 	rm -rf dist
