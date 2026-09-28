@@ -1,5 +1,12 @@
 # 05 · Emissions: traffic, fleet, heating and scenario measures
 
+This chapter describes how the model turns traffic volumes, the fleet, the hour of the week and domestic heating
+into the source strength q_k of each source group (A Vukovarska, B Miramarska, C other roads, D heating) for any
+pollutant and hour, and how the scenario measures (low-emission zone, electric vehicles and buses, a car-free
+Miramarska, less traffic, rush-hour queues, winter sanding) change it. The unit responses Γ_k that q_k multiplies
+come from [04 Dispersion](04-dispersion.md); the emission multiplier β that scales the result is fitted in
+[07 Calibration](07-calibration.md).
+
 *First draft by the models owner [models]. Covers `src/js/emissions.js`, its mirror in `tools/aqmodel.py`, and the
 emission tests in `src/js/tests/models.test.js` and `tests/python/test_aqmodel.py`. Every number below was
 recomputed from the code on 2026-09-28 (`python3 tools/aqmodel.py`).*
@@ -38,12 +45,12 @@ q_k and is therefore instant: no flow or scalar solve is repeated (physics §11.
 
 | Function / constant | Input | Output |
 |---|---|---|
-| `groupStrengths(pollutant, dateUTC, measures, opts)` | pollutant `'nox'`, `'no2'`, `'no'`, `'pm10'`, `'pm25'`, `'co'`, `'c6h6'`; hour-ending UTC time; measures (§7); `opts.heating` (`true` \| `'auto'` \| `false`), `opts.ef` (EF overrides), `opts.heatingScale`, `opts.congestionShare` | `{A, B, C, D}`. A–C in g m⁻¹ s⁻¹ per 10 000 veh/day, D in g m⁻² s⁻¹ per m² of heating weight w = 1 |
+| `groupStrengths(pollutant, dateUTC, measures, opts)` | pollutant `'nox'`, `'no2'`, `'no'`, `'pm10'`, `'pm25'`, `'co'`, `'c6h6'`; hour-ending UTC time; measures (§6); `opts.heating` (`true` \| `'auto'` \| `false`), `opts.ef` (EF overrides), `opts.heatingScale`, `opts.congestionShare` | `{A, B, C, D}`. A–C in g m⁻¹ s⁻¹ per 10 000 veh/day, D in g m⁻² s⁻¹ per m² of heating weight w = 1 |
 | `trafficFactor(dateUTC, {month})` | hour-ending UTC | f, with veh/h = AADT · f / 24; the weekly mean of f is 1 |
 | `measureFactors(measures)` | measures | `{exhaust:{nox, pm10, pm25, co, c6h6}, nonexhaust:{pm10, pm25}, resuspension, congestion, byGroup:{A, B, C}, evShare}` |
-| `EF_DEFAULT` | – | fleet emission factors, g veh⁻¹ km⁻¹ (§6) |
-| `TRAFFIC_PROFILES` | – | `{hour:{weekday, saturday, sunday}[24], day[7], month[12], raw}` (§5) |
-| `EM_HEATING`, `EM_CONGESTION`, `EM_MEASURES_TODAY` | – | heating, queue and default measure constants (§8, §9, §7) |
+| `EF_DEFAULT` | – | fleet emission factors, g veh⁻¹ km⁻¹ (§5) |
+| `TRAFFIC_PROFILES` | – | `{hour:{weekday, saturday, sunday}[24], day[7], month[12], raw}` (§4) |
+| `EM_HEATING`, `EM_CONGESTION`, `EM_MEASURES_TODAY` | – | heating, queue and default measure constants (§8, §7, §6) |
 | `POLLUTANTS`, `POLLUTANT_INFO[p]` | – | `['nox','no2','pm10','pm25','co','c6h6']`; `{short, unit, iszz, key, label}` (label localised with `t()`) |
 
 NO2 and NO have no emission of their own in this model. `groupStrengths('no2', …)` returns the NOx strengths, and
@@ -68,10 +75,11 @@ The solver's Γ is the response to that weight pattern, so q_k must be the emiss
   With f = 1 and EF_NOx = 0.50 this is **5.787 × 10⁻⁵ g m⁻¹ s⁻¹**. On a Tuesday in March at 08–09 h local time
   (f = 1.569) it is 9.08 × 10⁻⁵ g m⁻¹ s⁻¹.
 - **Heating.** One unit is 1 m² of heating polygon with weight w = 1, so q_D is an areal emission rate in
-  g m⁻² s⁻¹ (§9).
+  g m⁻² s⁻¹ (§8).
 
 The AADT of each road, its source group and its share on one-way carriageways are set by `tools/build_env.py`
-(geo-data owner, `env.json` `roads[].aadt`, `roads[].g`). The defaults (critic §4.6) are:
+(geo-data owner, `env.json` `roads[].aadt`, `roads[].g`; the splitting rules are in [02 Geometry](02-geometry.md)
+§2.7.2). The defaults (critic §4.6) are:
 
 | Link | AADT (veh/day, both directions) | Group |
 |---|---|---|
@@ -225,7 +233,8 @@ where φ_k is the share of the group's receptor response Γ_k that comes from th
 - **Queue stretches** (fallback.js, `FB_QUEUE`) are road points of groups A and B between 15 and 75 m from the
   Vukovarska × Miramarska intersection centre, on a carriageway that approaches it. The stop line is assumed 15 m
   from the centre, plus the 60 m of the critic. The centre is the mean crossing point of the A and B segments within
-  150 m of the station. For the 2026-09-27 env.json it is (x, z) = (+28.7, +50.8) m. Two-way ways count half, and
+  150 m of the station. For the 2026-09-27 env.json (before the frame fix of docs/02 §2.3, which moves points this
+  close to the station by less than 0.3 m) it is (x, z) = (+28.7, +50.8) m. Two-way ways count half, and
   one-way ways count when their travel direction points at the centre.
 - **With the Gaussian fallback**, φ_k is exact for every hour: `FallbackModel.receptor().queue[k] / gamma[k]`, and
   model.js passes it on.
@@ -317,10 +326,11 @@ The effective profile also contains the diurnal cycle of dispersion, so the two 
 early commuters and delivery traffic under the shallow night-time layer. The calibration diagnostics show the same
 thing (chapter 07: obs/mod ≈ 2–3 at 02–06 h).
 
-**Magnitude.** With these factors the raw physics (β = 1, U0 = 1.4) gives a mean ΔNOx of 11.9 µg/m³ against 46.7
-observed in 2025, obs/mod = 3.9. The critic's independent sanity run gave 11.0 against 46.0, i.e. 4.2
-(critic §1.12). With the GPU model (the 10 m receptor LUT) the same emissions give 14.1 µg/m³, obs/mod = 3.3
-(integration review, 2026-09-28). The fitted β is in chapter 07 (§9, §11.1).
+**Magnitude.** With these factors the raw physics (β = 1, U0 = 1.4) of the Gaussian fallback gives a mean ΔNOx of
+11.9 µg/m³ against 46.7 observed in 2025, obs/mod = 3.9. The critic's independent sanity run gave 11.0 against 46.0,
+i.e. 4.2 (critic §1.12). With the GPU model (the first receptor LUT, on the 10 m grid) the same emissions give
+14.1 µg/m³, obs/mod = 3.3 (integration review, 2026-09-28). The fitted β that closes this gap is in
+[07 Calibration](07-calibration.md) (§9 for the current fit, §11.1 for the first 3D fit, §10 for the fallback's).
 
 ## 11. Limitations
 
@@ -352,3 +362,5 @@ observed in 2025, obs/mod = 3.9. The critic's independent sanity run gave 11.0 a
   `tools/calibrate.py` afterwards; it also refreshes `congestion_share`.
 - Inspect one hour from the command line:
   `python3 tools/aqmodel.py --hour 2025-01-14T08:00Z --u10 1.2 --dir 45 --sw 50 --cc 90 --t2 0`.
+
+The full test suite and the LUT/calibration sequence are in [10 Runbook](10-runbook.md) §10.4–10.5.

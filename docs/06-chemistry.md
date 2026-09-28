@@ -1,5 +1,11 @@
 # 06 · Chemistry: NO–NO₂–O₃, background, limit values and the air-quality index
 
+This chapter describes how the modelled NOx increment becomes NO₂ at the inlet (the NO–NO₂–O₃ scheme with a finite
+reaction time, primary NO₂ fraction f_NO₂ = 0.10), where the background comes from (the suburban station ZAGREB-4,
+or CAMS bias-corrected to it in the forecast), and the limit values, thresholds and air-quality index bands the page
+uses. The NOx increment and the plume age it needs come from [04 Dispersion](04-dispersion.md) and
+[05 Emissions](05-emissions.md); the end-to-end scores are in [07 Calibration](07-calibration.md).
+
 *First draft by the models owner [models]. Covers `src/js/chemistry.js`, the chemistry parts of `src/js/meteo.js`
 (`jNO2`, `kNOO3`) and `src/js/model.js` (background, `concentrations`), their mirror in `tools/aqmodel.py`, and the
 chemistry tests. The test results below were recomputed on 2026-09-28 from `data/processed/`.*
@@ -31,7 +37,7 @@ It runs per receptor and per slice cell in JavaScript, and costs a few multiplic
 |---|---|---|
 | `noxInc` | µg/m³ (as NO2) | `increment()` for NOx (model.js); clipped at 0 |
 | `no2Bg`, `noxBg`, `o3Bg` | µg/m³ | ZAGREB-4 measurement (live or archive), or bias-corrected CAMS in forecast mode (data.js). Missing values: §6 |
-| `tau` | s | plume age from the age tracer, τ = Σ q A/(U_eff Σ q Γ) (physics Eq. 5.8). `CHEM_TAU_DEFAULT` = 60 s when there is no emission. `Infinity` = photostationary state; ≤ 0 = no reaction |
+| `tau` | s | plume age from the age tracer, τ = Σ q A/(U_eff Σ q Γ) (physics Eq. 5.8; [04 Dispersion](04-dispersion.md) §8). `CHEM_TAU_DEFAULT` = 60 s when there is no emission. `Infinity` = photostationary state; ≤ 0 = no reaction |
 | `J` | s⁻¹ | `jNO2(sw)` from the IFS hour-mean global radiation (§3) |
 | `k` | ppb⁻¹ s⁻¹ | `kNOO3(t2)` from the IFS 2 m temperature (§3) |
 | `fNO2` | – | primary NO2/NOx mass fraction of the exhaust, 0.10 (`calibration.json` `f_no2`) |
@@ -243,7 +249,8 @@ limits.
 - **Method.** With the calibrated Gaussian model (chapter 07), the held-out test predictions of ΔNOx go through the
   same chemistry with the ZAGREB-4 background.
 - **NO2 at ZAGREB-1, 2025, 7 422 test hours.** FB −0.009, NMSE 0.18, FAC2 0.86, R 0.75, RMSE 13.7 µg/m³, **MQI 0.53**
-  (`calibration.json` → `gauss.totals_test.no2`).
+  (`calibration.json` → `gauss.totals_test.no2`, as generated on 2026-09-27, before the fold-U0 fix of the plume age
+  in the held-out totals; docs/07 §11.1).
 - **Reading.** Most of that skill is the background's. The local increment is what the 3D model has to improve.
 
 ### 7.3 Automated tests
@@ -286,3 +293,5 @@ limits.
 - The chemistry-only check is re-run by `python3 tools/calibrate.py` (field `chemistry_check`). The variants table in
   §7.1 comes from the loop in `tests/python/test_aqmodel.py::TestChemistry` (default row), extended by hand for the
   other f and τ values.
+
+The full test suite and the calibration run are in [10 Runbook](10-runbook.md) §10.4–10.5.

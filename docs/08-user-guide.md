@@ -1,4 +1,4 @@
-# 08 User guide
+# 08 · User guide
 
 This chapter explains every part of the page: what each control does to the model, which changes are
 instant and which need a new wind simulation, how to read the charts, the presets, the three modes, keyboard
@@ -41,7 +41,9 @@ A `data-theme="light"` or `"dark"` attribute on `<html>` overrides the system se
 
 ![Dark mode](img/ui-dark.jpg)
 
-the layout they show is otherwise the same.*
+*The screenshots in this chapter were taken in the headless app on the 10 m grid with archive data only
+(`?grid=coarse&live=0`, §8.6); on a GPU the fields are finer and live values differ, but the layout they show is
+otherwise the same.*
 
 ---
 
@@ -483,7 +485,8 @@ If the forecast cannot be loaded, "Now" and "Forecast +24 h" leave the settings 
 
 ### 8.6 Validation
 
-`python3 tests/browser/run_selftest.py --only ui` runs 23 tests in the page (no network, no WebGL); the main ones:
+`python3 tests/browser/run_selftest.py --only ui.` runs the 20 UI tests in the page (no network, no WebGL; without
+the dot, `--only ui` also picks up four scene, flow and scalar tests whose names contain "ui"). The main ones:
 
 | Test | Checks |
 |---|---|
@@ -493,6 +496,8 @@ If the forecast cannot be loaded, "Now" and "Forecast +24 h" leave the settings 
 | `ui.live parsers` | −999 sentinel, the old `{Podatak}` shape, decimal comma, t−1/t means with the vector-averaged wind (350° and 10° → 0°), radiation not averaged, CAMS |
 | `ui.live bias ratios` | 14-day ratios, the NOₓ/NO₂ ratio, fallback to 2025 with too few pairs |
 | `ui.live iszz: window, 429 back-off, pacing, cache` | a mocked fetch: the export dates for an hour-ending window, a 429 retried after ≥ 1 s, requests ≥ 1.1 s apart, the cache |
+| `ui.live iszz: a refusal without CORS headers …`, `… a range over chunk_days …` | regressions of the data review (2026-09-28): a CORS-less 429 (a `TypeError` in the browser) is retried like a 429; a long range is split under the 1000-row cap with no duplicate hours |
+| `ui.zgtime: parts() agrees with Intl Europe/Zagreb 2023–2027` | the EU summer-time rule against the platform's time-zone database, hour by hour |
 | `ui.charts lineChart` | a detached element: SVG namespace, `role="img"`, aria-label, gaps break the line, the band, in-scale and off-scale limits, legend, 24 table rows, no NaN in any attribute |
 | `ui.charts diurnal, rose, columns, stack and empty state` | tick counts, 16 hit sectors, petals only for finite values, limit lines, stacked segments and tables, the empty-data note |
 | `ui.charts nice ticks` | tick steps and decimals |
@@ -503,6 +508,7 @@ If the forecast cannot be loaded, "Now" and "Forecast +24 h" leave the settings 
 | `ui.i18n completeness` | every `ui.*`, `chart.*` and `data.*` key in both languages and in its namespace; every key used in the markup and every key built at run time exists |
 | `ui.time labels` | the explicit hour spans ("08–09 h"), the hour ending 24:00 on the day it starts, the spring switch day (the hour 01–03 h), the DST-safe hour slider, grid labels, the default map (local increment) |
 | `ui.boot guard` | the app does not boot under `?selftest` |
+| `ui.charts time ticks keep 44 px apart` | time-axis labels never crowd, at any width and span (UI review) |
 
 Checks in a headless browser (Chromium with SwiftShader), recorded when this chapter was written:
 
@@ -560,4 +566,5 @@ python3 -m http.server 8000 -d dist                     # then open http://local
 
 URL parameters: `?lang=hr|en`, `?grid=coarse|fine` (flow grid), `?live=0` (no network: archive only, for
 screenshots and tests), `?sweep=lut` (compute the LUT for `tools/export_lut.py`), `?debug` (exposes a few internals
-as `window.__z1dbg`), `?selftest` (dist/test.html only).
+as `window.__z1dbg`), `?selftest` with `only=` and `skip-slow` (dist/test.html only). The full table, and every
+maintainer command, are in [10 Runbook](10-runbook.md) §10.7.

@@ -74,15 +74,17 @@ Items marked **[V]** were checked against the saved documents in `research/data/
 
 ## The station, Zagreb and its traffic
 
+The numbered list below is the source list of `docs/research/site-context.md` §8, kept with its numbering.
+
 **Station, network and official reports**
 
 1. ISZZ station metadata export (classification, parameters, start dates):
    https://iszz.azo.hr/iskzl/rs/postaja/eMetaList?id=155 and coordinates:
    https://iszz.azo.hr/iskzl/rs/postaja/koordinate
 2. DHMZ station page, Zagreb 1: https://meteo.hr/kvaliteta_zraka.php?section=podaci_kz&post=Zagreb+1
-   (its location text is wrong, see 1.1).
+   (its location text is wrong, see site-context §1.1).
 3. DHMZ (2024), *Izvješće o praćenju kvalitete zraka na postajama Državne mreže ... za 2023.*:
-   https://meteo.hr/kz/modeliranje/izvjesce_2023_kvaliteta_zraka.pdf. Source of the 2023 statistics in 1.2.
+   https://meteo.hr/kz/modeliranje/izvjesce_2023_kvaliteta_zraka.pdf. Source of the 2023 statistics in site-context §1.2.
 4. HAOP/ZZOP report for 2024 (national): https://www.haop.hr/hr/novosti/izvjesce-o-pracenju-kvalitete-zraka-na-teritoriju-republike-hrvatske-za-2024-godinu
 5. Grad Zagreb (Ekonerg), *Akcijski plan za poboljšanje kvalitete zraka na području Grada Zagreba* (SGGZ 5/15):
    https://eko.zagreb.hr/UserDocsImages/arhiva/dokumenti/Okoli%C5%A1/Zrak/Akcijski%20plan%20pobolj%C5%A1anja%20kvalitete%20zraka%20u%20GZ/Akcijski%20plan%20za%20pobolj%C5%A1anje%20kvalitete%20zraka%20na%20podru%C4%8Dju%20Grada%20Zagreba.pdf
@@ -137,7 +139,7 @@ Items marked **[V]** were checked against the saved documents in `research/data/
     crossroads.
 20. Kranjčić N., Dogančić D., Đurin B., Ptiček Siročić A. (2022), *Analyzing Air Pollutant Reduction
     Possibilities in the City of Zagreb*, ISPRS IJGI 11(4) 259, doi:10.3390/ijgi11040259. Uses Zagreb-1 and
-    describes its siting (see 1.1).
+    describes its siting (see site-context §1.1).
 21. Petrić V., Račić N., Hrga I., Grgec D., Marić M., Krivohlavek A. (2025), *Assessment of Sensor Data from an
     Air Quality Monitoring Network — ML-Based Recalibration*, Atmosphere 16(12) 1358,
     doi:10.3390/atmos16121358. 35 sensors in Zagreb against national reference stations; uses traffic

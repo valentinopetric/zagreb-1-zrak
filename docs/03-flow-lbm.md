@@ -1,8 +1,17 @@
 # 03 · Wind: the GPU wind tunnel, voxelisation and the job pipeline
 
+This chapter describes how the page computes the mean wind through the 3D neighbourhood on the GPU: the rotated
+tunnel and its grids, the Lattice-Boltzmann method and its inflow profile, how buildings, trees, roads and heating
+become cells and source weights, the job queue and caches that deliver fields to the rest of the page, and the export
+of the receptor lookup table (LUT) that the calibration and the forecast use. The pollutant solver that runs on this
+flow is [04 Dispersion](04-dispersion.md); the calibration that uses the LUT is [07 Calibration](07-calibration.md).
+
 *First draft by the flow owner [flow]. Covers `src/js/voxel.js`, `src/js/wind-tunnel.js`, `src/js/aero.js`,
 `src/js/tests/flow.test.js` and `tools/export_lut.py`. All numbers below were computed or measured on 2026-09-27/28
-with the code of this draft; the commands to reproduce them are in §11.*
+with the code of this draft; the commands to reproduce them are in §11. The measurements over the real city (§5.2,
+§5.3, §8) and the embedded 10 m LUT (§8.3) used the env.json of 2026-09-27T21:58:45Z (4,304 buildings, 1,828 trees),
+before the frame fix of 2026-09-28 (docs/02 §2.3). The current env.json has 4,275 buildings and 1,807 trees; the
+numbers are kept as measured, and the 5 m LUT export runs on the current geometry.*
 
 The binding specification is `docs/architecture.md` §5.1–5.2 and §6.2, with `docs/research/physics.md` §1, §6 and §11.3
 and `docs/research/critic.md` §4.3–4.4 (the critic's decisions override the other reports where they disagree).
@@ -22,7 +31,8 @@ inlet. This part:
    roads and heated houses into source weights (§4.4), and the solids into a wall-distance field (§4.5);
 3. runs a Lattice-Boltzmann (LBM) simulation of the flow on the GPU: first on a coarse grid, then on the fine grid
    seeded from it (§3, §5);
-4. hands the averaged flow to the scalar solver, reads the results back and caches them (§6);
+4. hands the averaged flow to the scalar solver ([04 Dispersion](04-dispersion.md) §1.1 lists what it reads), reads
+   the results back and caches them (§6);
 5. in the `?sweep=lut` mode, computes all 16 directions × 3 stability groups and exports the receptor LUT that
    calibration and the forecast use (§7).
 
@@ -327,7 +337,8 @@ half the steps at an eighth of the cells.
 Test `flow.timing.converge10m` runs the default NE direction (45°) over the real city at 10 m twice: once as above,
 once with the fine warm-up doubled (0.65 → 1.3 flow-throughs).
 
-Geometry: env.json generated 2026-09-27T21:58:45Z (4304 building parts, 1828 trees, 114 heating polygons).
+Geometry: env.json generated 2026-09-27T21:58:45Z (4304 building parts, 1828 trees, 114 heating polygons; the first
+build, before the frame fix).
 
 | Quantity near the station | Standard run | Warm-up × 2 | Change |
 |---|---|---|---|
@@ -512,7 +523,7 @@ and writes it. An incomplete LUT is written only with `--allow-incomplete`; othe
 
 | Step | 5 m | 10 m |
 |---|---|---|
-| Voxelise (env.json of 2026-09-27T21:58Z: 4304 prisms, 1828 trees in the geometry; 385 prisms and 267 trees inside the 45° tunnel) | 8 ms mean, 32 ms worst of 16 directions | 2 ms |
+| Voxelise (env.json of 2026-09-27T21:58Z, the first build: 4304 prisms, 1828 trees in the geometry; 385 prisms and 267 trees inside the 45° tunnel) | 8 ms mean, 32 ms worst of 16 directions | 2 ms |
 | Source raster | 12 ms | – |
 | Wall distance (BFS) | 159 ms | – |
 | Geometry hash | 4 ms | – |
@@ -547,7 +558,7 @@ A desktop GPU was not available here; physics §5.7 estimates 2–10 s per scala
 | Grid | Estimate from the table | Recommendation |
 |---|---|---|
 | 10 m | 16 × (16 s flow + 3 × 6 s scalar) ≈ 9 min, plus the page's own 3D rendering; measured end to end in §8.3 | run on SwiftShader: `tools/export_lut.py --grid coarse` |
-| 5 m | 16 × (246 s flow + 3 × 120 s scalar) ≈ 2.7 h; ≈ 3.5–4.5 h in the app, which also draws its views (the 10 m export took 1.6× its estimate) | feasible on SwiftShader as a one-off, and consistent with the app's default grid on a GPU: `tools/export_lut.py --grid fine --timeout 21600` |
+| 5 m | 16 × (246 s flow + 3 × 120 s scalar) ≈ 2.7 h; ≈ 3.5–4.5 h in the app, which also draws its views (the 10 m export took 1.6× its estimate) | feasible on SwiftShader as a one-off, and consistent with the app's default grid on a GPU: `tools/export_lut.py --grid fine --timeout 30000` (seconds; docs/10 §10.4) |
 
 **Grid dependence: why the LUT grid matters.** The same direction (45°, group D) on the two grids:
 
@@ -592,13 +603,15 @@ same β and U0 to four digits (docs/07 §11.1).
 
 Mean over the 16 directions:
 
-| Group | Γ_A (Vukovarska) | Γ_B (Miramarska) | Γ_C (other roads) | Γ_D (heating) | Age A / B (s·U_ref-normalised) |
+| Group | Γ_A (Vukovarska) | Γ_B (Miramarska) | Γ_C (other roads) | Γ_D (heating) | Age A_A / A_B (raw tracer, Γ × m) |
 |---|---|---|---|---|---|
 | AC (class B, lid 520 m) | 0.097 | 0.184 | 0.0089 | 0.125 | 28.7 / 28.2 |
 | D (class D, lid 135 m) | 0.179 | 0.399 | 0.0215 | 0.549 | 108 / 126 |
 | EF (class F, lid 100 m) | 0.181 | 0.572 | 0.0279 | 0.783 | 160 / 265 |
 
-Γ rises from unstable to stable for every group, as it should. By direction (group D): Vukovarska (A, south of the
+The age columns are the raw tracer A_k of architecture §4.4 (units of Γ_k × m); model.js turns them into the plume
+age τ = Σ q_k A_k / (U_eff Σ q_k Γ_k) in seconds ([04 Dispersion](04-dispersion.md) §3, §8). Γ rises from unstable
+to stable for every group, as it should. By direction (group D): Vukovarska (A, south of the
 station) dominates for winds from SSE–S (Γ_A 0.59 at 157.5°, 0.43 at 180°) and is near zero for N–E winds. Miramarska
 (B, east) dominates for N–E winds (0.46–0.65) and is low for SW–W (0.008–0.06). The mast wind shows where the station is
 sheltered. For approach winds from NW to N (315°–0°), s4 is only 0.02–0.06 U10 and the local wind comes from the far
@@ -607,8 +620,11 @@ which carries Miramarska's air back to the inlet (Γ_B 0.82 at 315°). The stati
 unreliable for N-sector flows (critic §1.5). For SW–W winds the mast wind turns to 253–271° at 0.07–0.35 U10.
 
 This LUT is a **stop-gap**. It uses the 10 m grid (see "Grid dependence" above), the provisional geometry of 2026-09-27
-and the scalar solver as of the same night. Re-export at 5 m (`--grid fine`, ≈ 3.5–4.5 h on SwiftShader) once geometry and
-solver are final, and re-run the calibration afterwards.
+(before the frame fix) and the scalar solver as of the same night, so its `band` is the first, half-cell-shifted 3×3×2
+block and it has no per-entry `quality` (architecture §4.4). Re-export at 5 m (`--grid fine`, ≈ 3.5–4.5 h on
+SwiftShader) once geometry and solver are final, and re-run the calibration afterwards ([10 Runbook](10-runbook.md)
+§10.4). That 5 m export was started on 2026-09-28 at 09:28 local on the current geometry; it runs the code of that
+moment, so it also has the first band and no `quality` (docs/11 §11.6 item 4).
 
 ---
 
@@ -651,7 +667,8 @@ solver are final, and re-run the calibration afterwards.
    ground variant is the sensitivity test the critic asks for, and it is not implemented yet.
 3. **5 m cells against the 9–12 m kerb distance (critic §1.6, G13).** The Miramarska kerb is 2–2.5 cells from the inlet,
    and the receptor at 4 m lies between the cell centres at 2.5 and 7.5 m. The canyon vortex is resolved coarsely.
-   The scalar solver reports the representativeness band (min–max over 3×3×2 cells). A nested 2.5 m inner box is v2. On
+   The scalar solver reports the representativeness band (min–max over the cells within 1.5 cells of the inlet in the
+   two layers around 4 m: 4×4×2 at the ZAGREB-1 inlet, architecture §4.4). A nested 2.5 m inner box is v2. On
    software renderers the fine grid is 10 m, so the kerb is about one cell away; that LUT is correspondingly coarser and
    is marked in `meta.grid`.
 4. **Porous trees are heuristic (critic §4.3).** The porous fraction is the critic's unsourced starting value. A row of
@@ -674,14 +691,14 @@ solver are final, and re-run the calibration afterwards.
 
 ```bash
 export Z1_BROWSER_LIBS=…   # only on machines without the system libraries (see tests/browser/harness.py)
-python3 tests/browser/run_selftest.py --only flow. --skip-slow       # the 12 fast flow tests (~30 s on SwiftShader)
+python3 tests/browser/run_selftest.py --only flow. --skip-slow       # the 13 fast flow tests (~30 s on SwiftShader)
 python3 tests/browser/run_selftest.py --only flow.timing.10m         # one direction at 10 m + timings  [slow, ~25 s]
 python3 tests/browser/run_selftest.py --only flow.timing.5m          # one direction at 5 m + timings   [slow, ~7 min]
 python3 tests/browser/run_selftest.py --only flow.timing             # both, plus the convergence check [slow]
 python3 tests/browser/run_selftest.py --only flow.trees              # tree-row wake                    [slow, ~35 s]
 python3 tests/browser/smoke.py --wait 300 --query "grid=coarse"      # the whole app: first field on SwiftShader
 python3 tools/export_lut.py --grid coarse                            # the LUT at 10 m
-python3 tools/export_lut.py --grid fine --timeout 43200              # the LUT at 5 m
+python3 tools/export_lut.py --grid fine --timeout 30000              # the LUT at 5 m (seconds; hours on SwiftShader)
 python3 tools/export_lut.py --check src/data/lut_receptor.json       # validate a LUT
 ```
 
@@ -694,6 +711,7 @@ Test list (`src/js/tests/flow.test.js`, all names start with `flow.`):
 | `flow.voxel` rotated 30° | cover volume vs analytic area (error 0.000 %) for a rotated rectangle, a rectangle in a rotated tunnel and an L shape; every cell matches a 40×40-point brute-force cover | passed; mask volume +7.6 / +8.3 / +10.3 % (the 50 % rule rounds partly covered cells up to solid) |
 | `flow.voxel` trees | §4.2–4.3 rules | passed |
 | `flow.voxel` real city | speed, station cell open, λp | passed (§8.1) |
+| `flow.voxel: vox_envGeometry keeps the station tree once` | regression (review 2026-09-28): the ENV fallback geometry lists the station tree once, not twice | passed |
 | `flow.sources` | length × aadt conservation, groups, layer, heating, sponge | passed |
 | `flow.inflow` | closed form, matching at z_b, NWP profile = 1 at 10 m, continuity, monotone, physics §6.2 example, Mach | passed |
 | `flow.wall` | BFS vs brute force | passed (max error 0) |
@@ -707,3 +725,6 @@ Test list (`src/js/tests/flow.test.js`, all names start with `flow.`):
 
 Note: `run_selftest.py --only flow` selects by substring and so also runs other owners' tests whose names contain "flow"
 (scalar T1/T1b/T2/age, a scene test). Use `--only flow.` for this chapter's tests alone.
+
+The same commands, with the other pipelines, are in [10 Runbook](10-runbook.md) (§10.4 for the LUT, §10.5 for the
+tests).

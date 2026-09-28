@@ -103,34 +103,101 @@ the scalar owner agreeing on the slice data layout.
 While doing so, the flow owner exported a first **10 m receptor LUT** (16 directions × 3 stability groups × 4
 source groups, 48 GPU runs, 15 min). The models owner then calibrated the 3D model against held-out ISZZ data.
 
-## 11.6 Step 5: integration (the lead)
+## 11.6 Step 5: integration and review (the lead, three reviewers)
 
-1. **Checkpoint commit.** 117 Python tests and 68 in-page tests pass. The end-to-end test (`tests/browser/e2e.py`)
-   boots the page, computes the GPU fields for today and for the "tree rows" scenario, and screenshots both screen
-   sizes.
-2. **Frame fix.** The reference's equirectangular constants compress the map by 0.17 %/0.55 %. They were replaced by
-   exact WGS84 metres per degree, and `env.json` was rebuilt offline from the caches (docs/02-geometry.md §2.3).
-3. **5 m LUT export.** Started in a detached `tmux` session because it takes hours on software WebGL. Recalibration
-   followed when it finished (docs/07-calibration.md).
-4. **Independent review.** Three reviewers checked physics and units, data and time, and UI and accessibility. Each
-   was told to verify every finding with a computation or test before reporting it, and to fix only confirmed bugs
-   in its own scope, with a regression test.
+The git history records the build in four commits (`git log --stat`):
+
+| Commit | Local time | Content | Size |
+|---|---|---|---|
+| `361092c` Scaffold | 2026-09-27 23:08 | `config/site.json`, the shared tools, `tools/build.py`, `core.js`, `i18n.js`, the test harness, the architecture contract, the five research reports (§11.3–11.4) | 36 files, +5,205 lines |
+| `e4e8563` Build all modules | 2026-09-28 08:56 | the seven owners' work (§11.5) after the lead's integration review (item 1 below): data pipelines, processed tables, pure models, 3D scene, GPU wind and dispersion, UI, chapters 01–08 and 12 | 81 files, +42,951 |
+| `9a896b9` Integration | 2026-09-28 10:25 | the exact frame and the fixes from the physics and data reviews (items 3 and 5); chapters 00, 09, 10, 11, glossary, references, README, data licences; the CI workflows | 35 files, +1,237 / −56 |
+| `920d739` UI review | 2026-09-28 11:01 | the fixes from the UI review (item 5); chapters 08 and 12 updated, fresh screenshots | 20 files, +1,238 / −373 |
+
+1. **Integration review, before the checkpoint.** The lead ran the whole app headless and fixed what only shows when
+   the modules run together. The fixes are marked "integration review / fix / addition, 2026-09-28" where they are
+   documented:
+   - a receptor-only sweep job answered from the receptor store is now delivered, so the 16-direction sweep no longer
+     waits forever on a second visit (docs/03 §7.2);
+   - the receptor store and the LUT carry a hash of the solver code (`aero_codeHash`) and the tree state
+     (`meta.leaves`) (docs/03 §6.2, §7.1);
+   - live fields on another grid than the LUT no longer replace it; a scenario field is carried onto the LUT as a
+     relative change (architecture §6.1, `mod_deltaOnLut`);
+   - the lid control is display-only, and the docs say so (docs/08 §8.7);
+   - 3D labels are decluttered (docs/12 §6.4);
+   - the 10 m LUT was re-exported on an idle machine and the 3D model was calibrated on it for the first time
+     (docs/03 §8.3, docs/07 §11.1).
+2. **Checkpoint commit** `e4e8563`. 117 Python tests and the 68 fast in-page tests pass (75 in-page tests in all,
+   7 of them slow). The end-to-end test (`tests/browser/e2e.py`) boots the page, computes the GPU fields for today
+   and for the "tree rows" scenario, and screenshots both screen sizes.
+3. **Frame fix.** The reference's equirectangular constants compress the map by 0.17 %/0.55 %. They were replaced by
+   exact WGS84 metres per degree (kx = 77 741.2, ky = 111 147.4 m per degree), and `env.json` was rebuilt offline
+   from the caches (docs/02-geometry.md §2.3): 4,275 buildings instead of 4,304, 1,807 trees instead of 1,828. The
+   embedded 10 m LUT and its calibration were computed on the geometry before the fix (docs/07 §11.1).
+4. **5 m LUT export.** Started at 09:28 local, two minutes after the rebuilt `env.json`, in a detached `tmux`
+   session, because it takes hours on software WebGL (docs/10-runbook.md §10.4). `export_lut.py` builds the page once
+   at its start, so this export runs the current geometry with the code of 09:28. The band-centring and per-entry
+   quality fixes of the physics review (item 5; `scalar.js` and `aero.js` were last written at 10:12–10:14) are not
+   in it. They do not change Γ or the age A; the LUT's `band` is the first, shifted block and it has no `quality`.
+   When it finishes, `src/data/lut_receptor.json` and `src/data/calibration.json` are replaced and
+   `tools/calibrate.py` regenerates docs/07-calibration.md §9 by itself. Until then the page and the docs use the
+   10 m LUT and its first calibration.
+5. **Three independent reviews**, while the 5 m export ran. Three reviewers checked (a) physics and units, (b) data
+   and time, and (c) UI and accessibility. Each was told to verify every finding with a computation or test before
+   reporting it, and to fix only confirmed bugs in its own scope, with a regression test. The confirmed findings and
+   their fixes:
+   - *Physics and units* (commit `9a896b9`):
+     - the 3D β and U0 of `calibration.json` were applied to any LUT; they now apply only to a LUT on the grid they
+       were fitted on (model.js `mod_calFor`, finding 1; docs/07 §12, architecture §6.1);
+     - the representativeness band was a 3×3×2 block shifted half a cell downstream; it is now centred on the inlet
+       (scalar.js `ScalarField.receptor`; architecture §4.4);
+     - every LUT entry now carries its solve quality, and `export_lut.py --check` warns about entries that did not
+       converge (aero.js, finding 6);
+     - documented, not changed: the Gaussian fallback and the GPU tunnel see different source areas, which matters
+       for heating with westerly winds (finding 4; docs/07 §12, docs/09 §9.2), and the summer model correlates better
+       with the traffic profile shifted by +1 h (docs/09 §9.1).
+   - *Data and time* (commit `9a896b9`; the browser regression tests are in `ui.test.js`, commit `920d739`):
+     - ISZZ sends its HTTP 429 without CORS headers, so the browser sees a network error; data.js now retries it like
+       a 429 (docs/08 §7);
+     - a request range longer than `chunk_days` is split under the 1000-row cap without duplicate hours (data.js);
+     - three implausible raw station wind values (57, 127.6 and 219.5 m/s, May–June 2024) are dropped and counted
+       (`build_measurements.py`, docs/01 §10);
+     - documented: raw 2026 CO shows analyser zero drift (docs/01 §10, docs/09 §9.3).
+   - *Also fixed from the reviews in commit `9a896b9`*: the held-out totals of `calibrate.py` used the whole-period U0
+     for the plume age of a test hour, now the fold's U0 (no test leakage); the ENV fallback geometry voxelised the
+     station tree twice (voxel.js `vox_envGeometry`).
+   - *UI and accessibility* (commit `920d739`):
+     - the slice shows the local sources by default, on linear per-pollutant scales, with a total/EAQI switch and a
+       labelled legend (docs/08 §3.8, docs/12 §6.1);
+     - the panel puts the essentials first and the advanced, model, forecast and data sections in collapsible groups
+       (docs/08 §1, §3);
+     - 3D labels stay inside their view and give way to the cards (docs/12 §6.4);
+     - the model status and explicit hour intervals appear wherever numbers do; the forecast states which hours lack
+       CAMS; the hour slider is safe on daylight-saving days; the 3D sun stands at the middle of the hour
+       (docs/08 §2–§3);
+     - chart time axes choose their tick step from the plot width, so date labels never overlap.
+
+   With the regression tests the suite grew from 117 to 120 Python tests and from 75 to 85 in-page tests.
 
 ## 11.7 How to repeat this for another station
 
 1. Change `config/site.json`: the station id and coordinates, the background station, the frame origin, and the
    ZG3D/DTM sources if the station is outside Zagreb. Outside Zagreb, use the OSM building fallback or ask DGU for
    LiDAR.
-2. `make data` (docs/10-runbook.md). Check `docs/img/geo_*.png` and the validation JSON.
-3. Revisit the source groups (the two named streets in `tools/build_env.py`) and the AADT table (docs/05-emissions.md).
-4. `make build`, `make lut`, `make calibrate`, `make test`.
-5. Re-read `docs/09-limitations.md` and redo the site-specific checks: inlet height, kerb distance, anemometer quality.
+2. `make data` ([10 Runbook](10-runbook.md) §10.2–10.3). Check `docs/img/geo_*.png` and the validation JSON
+   ([02 Geometry](02-geometry.md) §2.9).
+3. Revisit the source groups (the two named streets in `tools/build_env.py`) and the AADT table
+   ([02 Geometry](02-geometry.md) §2.7.2, [05 Emissions](05-emissions.md) §3).
+4. `make build`, `make lut`, `make calibrate`, `make test` ([10 Runbook](10-runbook.md) §10.4–10.5).
+5. Re-read [09 Limitations](09-limitations.md) and redo the site-specific checks: inlet height, kerb distance,
+   anemometer quality.
 
 ## 11.8 Tools and effort
 
 | | |
 |---|---|
-| Agents | 4 research + 1 critic + 7 module owners + reviewers |
-| Code | about 18,000 lines (JS about 11,000, Python about 7,000) |
-| Tests | 117 Python unit tests; 68 fast and 12 slow in-page tests; an end-to-end browser test |
-| External data | ISZZ (about 1,300 paced requests for the full history), Open-Meteo (a few), ZG3D (18 pages), DGU DTM (1 range request), Overpass (7 queries) |
+| Agents | 4 research + 1 critic + 7 module owners + 3 reviewers (physics and units, data and time, UI) |
+| Code | about 18,800 lines (JS about 11,700 in `src/js/`, Python about 7,100 in `tools/`), plus about 4,600 lines of tests |
+| Tests (commit `920d739`) | 120 Python unit tests (`test_iszz.py` 54, `test_geometry.py` 44, `test_aqmodel.py` 22); 85 in-page tests (78 fast, 7 slow: flow 17, models 16, scalar 14, scene 18, ui 20); an end-to-end browser test |
+| Documentation | chapters 00–12, the architecture contract, glossary and references (about 6,600 lines), plus the five research reports (about 3,900 lines) |
+| External data | ISZZ (about 1,300 paced requests for the full history), Open-Meteo (a few), ZG3D (12 pages and a count query), DGU DTM (1 range request), Overpass (7 queries) |

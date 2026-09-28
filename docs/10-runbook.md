@@ -1,6 +1,8 @@
-# 10. Runbook
+# 10 · Runbook
 
-Every command runs from the repository root. The pipeline and the page need only **Python 3.10+ (standard
+This chapter lists every command that builds, tests, refreshes, recalibrates and deploys the project, with the
+network it needs and how long it takes. The chapters explain what each step does; each section below links to
+them. Every command runs from the repository root. The pipeline and the page need only **Python 3.10+ (standard
 library)**. The browser tests and the LUT export also need `playwright` and a Chromium (`requirements-dev.txt`). There
 is no Node and no bundler.
 
@@ -15,21 +17,21 @@ python3 -m playwright install chromium               # (add --with-deps on a fre
 |---|---|---|---|
 | Build the page | `make build` (= `python3 tools/build.py`) | no | 1 s |
 | View locally | `make serve`, then open <http://localhost:8000> | three.js from jsDelivr | – |
-| All Python tests | `make test-py` | no | 5 s |
-| In-page tests (fast) | `make selftest` | three.js | 1–2 min |
-| In-page tests incl. slow GPU verification | `python3 tests/browser/run_selftest.py --timeout 3600` | three.js | 20–60 min on SwiftShader |
+| All Python tests (120) | `make test-py` | no | 5 s |
+| In-page tests, fast (78 of 85) | `make selftest` | three.js | 1–2 min |
+| In-page tests incl. the 7 slow GPU verifications | `python3 tests/browser/run_selftest.py --timeout 3600` | three.js | 20–60 min on SwiftShader |
 | End to end (today + a scenario, 2 screen sizes) | `make e2e` | three.js | 2–5 min |
 | Refresh measurements | `make measurements` | ISZZ, Open-Meteo | 1–3 min (incremental) |
 | Refresh geometry | `make geometry` | ZG3D, DGU, Overpass | 2–5 min |
-| Export the receptor LUT | `make lut` (= `python3 tools/export_lut.py`) | three.js | 15 min at 10 m, 3–5 h at 5 m on SwiftShader, minutes on a real GPU |
+| Export the receptor LUT | `make lut` (= `python3 tools/export_lut.py`) | three.js | 15 min at 10 m, 3.5–4.5 h at 5 m on SwiftShader, minutes on a real GPU |
 | Recalibrate | `make calibrate` | no | 10–60 s |
 
 ## 10.2 Refresh the measurements (weekly, automated)
 
-`.github/workflows/refresh-data.yml` runs every Monday. By hand:
+`.github/workflows/refresh-data.yml` runs every Monday (04:37 UTC). By hand:
 
 ```sh
-python3 tools/fetch_iszz.py              # incremental: only chunks that are not final (the last ~45 days + a validated probe)
+python3 tools/fetch_iszz.py              # incremental: only chunks that are not final (the last ~60 days + a validated probe)
 python3 tools/fetch_meteo.py             # Open-Meteo ECMWF IFS archive, hour-ending means
 python3 tools/build_measurements.py      # -> src/data/measurements.json
 python3 tools/build.py
@@ -37,14 +39,18 @@ python3 tools/build.py
 
 Variants:
 
-- `fetch_iszz.py --refresh-validated` re-reads the validated series of the last years. Run it once DHMZ publishes
-  validated data for a new year; it typically lands the following spring.
+- `fetch_iszz.py --refresh-validated` re-reads the validated series of the last 2 years (`--validated-lookback`).
+  Run it once DHMZ publishes validated data for a new year; it typically lands the following spring.
+- `--settle-days N` (default 60) and `--min-age-hours H` (default 6) set when a chunk is final and how often a
+  non-final one is downloaded again (docs/01 §2.7).
 - `fetch_iszz.py --full` downloads everything again (about 1,260 requests, 25 min at the required 1.1 s pace).
 - `fetch_iszz.py --dry-run` prints the URLs that would be requested.
 - `fetch_iszz.py --offline` rebuilds the outputs from the cache or the committed table.
 
 Politeness: ISZZ answers bursts with HTTP 429. The fetcher paces at 1.1 s and backs off on its own. Never run two
 fetchers at once.
+
+Details: [01 Data sources](01-data-sources.md) §2.7 and §8 (the incremental rules and every flag).
 
 ## 10.3 Refresh the geometry
 
@@ -60,6 +66,8 @@ After a geometry change:
 1. Look at `docs/img/geo_*.png` and the validation block that `build_env.py` logs.
 2. **Re-export the LUT and recalibrate** (§10.4). The model's responses depend on the geometry, and the LUT records
    the geometry hash it was computed with.
+
+Details: [02 Geometry](02-geometry.md) §2.11 and §2.9 (flags and timings, and the validation numbers to compare).
 
 ## 10.4 Export the receptor LUT and recalibrate
 
@@ -87,16 +95,25 @@ cp data/cache/lut/lut_fine.json src/data/lut_receptor.json && python3 tools/cali
 You can also export the LUT from the page itself on a real GPU. The "Compute all 16 directions" sweep in *Model vs
 measurements*, followed by the LUT download button, produces the same file.
 
+`tools/calibrate.py` rewrites `src/data/calibration.json` and the results block of docs/07-calibration.md §9
+(between the `CALIBRATION-RESULTS` markers; `--no-docs` leaves the chapter alone). The fit belongs to the LUT's grid:
+the page applies it only to a LUT on the same grid (docs/07 §12). Details: [03 Wind](03-flow-lbm.md) §7–8 (the LUT)
+and [07 Calibration](07-calibration.md) §5 and §11 (the protocol).
+
 ## 10.5 Tests
 
 ```sh
-python3 -m unittest discover -s tests/python -v          # tools: parsing, time, geometry, model parity (fixtures, no network)
-python3 tests/browser/run_selftest.py --skip-slow         # in-page: models, scene, flow, scalar, ui
+python3 -m unittest discover -s tests/python -v          # 120 tests: parsing, time, geometry, model parity (fixtures, no network)
+python3 tests/browser/run_selftest.py --skip-slow         # in-page: 78 fast tests of models, scene, flow, scalar, ui
 python3 tests/browser/run_selftest.py --only scalar       # one owner's tests (substring match)
 python3 tests/browser/smoke.py --query "grid=coarse&live=0"
 python3 tests/browser/e2e.py --query "grid=coarse&live=0"
 ```
 
+- Counts (commit `920d739`): Python `test_iszz.py` 54, `test_geometry.py` 44, `test_aqmodel.py` 22; in-page flow 17,
+  models 16, scalar 14, scene 18, ui 20, of which 7 are slow (flow 4, scalar T3/T4, models 1).
+- `--only` selects by substring, so `--only flow` also runs scalar and scene tests whose names contain "flow". Use
+  the owner prefix with its separator (`flow.`, `ui.`, `scene:`, `scalar`, `models`) for one owner's tests alone.
 - If the system lacks the libraries Chromium needs and you have no root, extract them from the `.deb` packages into a
   folder and point `Z1_BROWSER_LIBS` at its `usr/lib/x86_64-linux-gnu` (docs/11-process.md §11.2).
 - `Z1_CHROMIUM` selects a specific browser binary.
@@ -108,12 +125,17 @@ python3 tests/browser/e2e.py --query "grid=coarse&live=0"
 together with `docs/`. The data refresh workflow dispatches it after each data commit. To enable it, go to Settings →
 Pages → Source: *GitHub Actions*.
 
+`.github/workflows/tests.yml` runs on every push to `main` and on pull requests: the Python tests,
+`tools/build.py --test`, `tools/export_lut.py --check src/data/lut_receptor.json`, then the fast in-page tests
+(`run_selftest.py --skip-slow`) and a smoke test (`smoke.py --query "grid=coarse&live=0"`) in headless Chromium. The
+slow tests run only locally (§10.5).
+
 ## 10.7 URL parameters
 
 | Parameter | Effect |
 |---|---|
-| `?lang=hr` / `?lang=en` | UI language (default: the browser language, else Croatian) |
-| `?grid=coarse` / `?grid=fine` | 10 m or 5 m fine grid (the default is 5 m, or 10 m on a software renderer) |
+| `?lang=hr` / `?lang=en` | UI language (default: the last choice stored in the browser, else Croatian for a hr/bs/sr browser language, else English) |
+| `?grid=coarse` / `?grid=fine` | 10 m or 5 m fine grid (the default is 5 m, or 10 m on a software renderer); the spin-up grid is always twice the fine cell |
 | `?live=0` | no network requests for data; the archive only (deterministic screenshots and tests) |
 | `?debug` | exposes internals on `window.__z1dbg` |
 | `?sweep=lut` | computes the full receptor LUT and publishes it on `window.__lut` (used by `export_lut.py`) |
@@ -130,3 +152,5 @@ Pages → Source: *GitHub Actions*.
 | `export_lut.py` times out | Raise `--timeout`. Check `data/cache/lut/*.log` for page errors. |
 | Overpass fails | `fetch_osm.py` falls back to the second endpoint. It needs a User-Agent (HTTP 406 without one; `tools/common.py` sets it). |
 | The ZG3D FeatureServer is gone | Use the district shapefiles on data.zagreb.hr (docs/02-geometry.md, fallback F1), or the committed `env.json`. |
+
+The user-facing side of the same problems (what the page shows and why) is in [08 User guide](08-user-guide.md) §7.

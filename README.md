@@ -57,8 +57,10 @@ ECMWF IFS (Open-Meteo) ───┴─► measurements ───┘             
    Everything is linear, so traffic, pollutant, hour and wind speed change instantly without re-simulating.
 4. **Chemistry and background.** NO–NO₂–O₃ with a finite reaction time. Background from the suburban station ZAGREB-4,
    or CAMS in the forecast ([docs/06](docs/06-chemistry.md)).
-5. **Calibration.** β and U₀ are fitted on half of 2025 and scored on the other half, with Chang & Hanna metrics and a
-   statistical baseline ([docs/07](docs/07-calibration.md)).
+5. **Calibration.** β and U₀ are fitted to the 2025 measurements and scored only on held-out hours (two half-year
+   folds and leave-one-month-out), with Chang & Hanna metrics and a statistical baseline
+   ([docs/07](docs/07-calibration.md)). The first 3D calibration used a 10 m receptor table; a 5 m one replaces it
+   when its export finishes, and docs/07 §9 always holds the current numbers.
 
 ## Quick start
 
@@ -73,7 +75,7 @@ Everything the page needs is already in `src/data/`. To rebuild the data from th
 make data        # ISZZ + Open-Meteo measurements, ZG3D + DGU + OSM geometry
 make lut         # receptor lookup table from the GPU model (needs playwright; slow without a GPU)
 make calibrate   # fit and score against held-out measurements
-make test        # Python unit tests + in-page test suite in headless Chromium
+make test        # 120 Python unit tests + the 78 fast in-page tests in headless Chromium
 ```
 
 See the [runbook](docs/10-runbook.md) for every command, option and troubleshooting step.
@@ -102,8 +104,10 @@ docs/                 00–12 chapters, architecture contract, research reports,
 | [07 Calibration](docs/07-calibration.md) | How good it is, on held-out data |
 | [08 User guide](docs/08-user-guide.md) | Every control, explained |
 | [09 Limitations](docs/09-limitations.md) | What the model cannot do |
-| [10 Runbook](docs/10-runbook.md) · [11 Process](docs/11-process.md) | Commands, and how the repo was built step by step |
-| [Architecture](docs/architecture.md) · [Research](docs/research/) | The interface contract, and the five research reports |
+| [10 Runbook](docs/10-runbook.md) · [11 Process](docs/11-process.md) | Commands, and how the repo was built step by step (research, contract, build, integration, three reviews) |
+| [12 Rendering](docs/12-rendering.md) | The 3D scene, the scenarios, colour scales, slice, particles, labels |
+| [Architecture](docs/architecture.md) · [Research](docs/research/) | The interface contract (with its "As implemented" notes), and the five research reports |
+| [Glossary](docs/glossary.md) · [References](docs/references.md) | Terms, abbreviations and every cited source |
 
 ## Sources and licences
 

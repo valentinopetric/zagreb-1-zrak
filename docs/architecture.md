@@ -8,6 +8,20 @@ Background research, with every number sourced or tested, is in `docs/research/`
 wherever they disagree. Two examples: ZAGREB-4 is the background, not Mirogojska, and
 f_NO2 = 0.10.
 
+**Reading guide.**
+
+- The plain text of each section is the contract as it was written before any module existed
+  (2026-09-27, commit `361092c`).
+- The paragraphs that begin **"As implemented"** were added later by the module owners, the lead's
+  integration review and the three reviews of 2026-09-28 (physics and units, data and time, UI; see
+  [11 Process](11-process.md) §11.6). They record real deviations and additions. **Where an "As
+  implemented" note differs from the contract text above it, the note is authoritative**, and the
+  code follows it. Each note sits in the section of the interface it changes, oldest first.
+- Numbers inside the `jsonc` schema examples (e.g. `"parts": 4333`, `"beta": 4.2`, `"increment"`)
+  are illustrative. The current values are in the data files and in chapters 01, 02 and 07.
+- Owners are given in brackets: [lead], [geo-data], [meas-data], [models], [scene], [flow], [scalar],
+  [ui] (§3, and [11 Process](11-process.md) §11.5).
+
 ---
 
 ## 1. What the app is
@@ -91,6 +105,11 @@ earlier files only at call time. Consequences:
 - Never re-declare a name that another file owns.
 - Prefix private helpers with the file's short name (`vox_`, `sc_`, `em_`, …) or keep them inside
   a class or IIFE.
+
+As implemented (integration, 2026-09-28): `tests/browser/` also holds `e2e.py` (today's field and one geometry
+scenario's field, both views, two screen sizes; `make e2e`), and `.github/workflows/` holds `pages.yml` (deploy),
+`tests.yml` (CI) and `refresh-data.yml` (weekly data refresh). `tools/build.py --test` writes `dist/test.html`
+(the page plus `src/js/tests/*.test.js` and `run.js`). The commands are in [10 Runbook](10-runbook.md).
 
 ## 4. Baked data schemas (tools → src/data)
 
@@ -190,7 +209,9 @@ calendar years only (≥ 75 % of hours; the running year is in `ytd`); wind-dire
 roses bin by the IFS direction and count hours with IFS U10 < 0.5 m/s as calm; a 24 h exceedance needs ≥ 18 valid
 hours per local day; `increment` pairs each parameter on its own hours. `data/processed/` also holds
 `iszz_pm10_gravimetric.csv` and `ifs_hourly.meta.json`; the IFS boundary-layer height is missing before 2024-09-01
-and for 493 h in September–October 2025 (meteo.js then uses the class median BLH).
+and for 493 h in September–October 2025 (meteo.js then uses the class median BLH). After the data review
+(2026-09-28), `meta.sources.plausibility` records the station-meteo values dropped as physically implausible
+(wind outside 0–40 m/s and similar limits; docs/01 §10).
 
 ### 4.3 `calibration.json` (models, `tools/calibrate.py`)
 
@@ -234,6 +255,17 @@ model.js computes τ = Σ q_k A_k / (U_eff Σ q_k Γ_k) in seconds. `meta` also 
 `code`, `code_hash` (aero.js `aero_codeHash()`, from exports after 2026-09-28), `geometry_hash`, `env_generated_utc`, `leaves` (the tree state it was computed with), `spinup`, `lbm`,
 `inflow`, `stab` (the representative class and lid per group), `receptor`, `mast_heights_m` and `timing`.
 `tools/export_lut.py --check` validates a file against this schema.
+
+As implemented after the physics review (2026-09-28; scalar.js `ScalarField.receptor`, aero.js `exportLUT`):
+
+- `band` is the min/max of Γ over every fluid cell whose centre lies within 1.5 cells of the receptor horizontally,
+  in the two layers around 4 m. That is a 3×3×2 block when the receptor is at a cell centre and a 4×4×2 block when
+  it sits on a cell face, as the ZAGREB-1 inlet does on the 5 m and 10 m tunnels. (The first version rounded to a
+  3×3×2 block shifted half a cell downstream.)
+- LUTs exported after the review also carry `quality: [dir][class] {sweeps, converged, reason, mass_err, mass_ok}`,
+  and `tools/export_lut.py --check` warns about entries that did not converge or miss the mass tolerance. Older
+  files have no `quality` and have the first band: the embedded 10 m LUT of 2026-09-27, and the 5 m export started
+  on 2026-09-28 at 09:28 with the code of that moment (docs/11 §11.6).
 
 ## 5. Physics contract (summary; the full spec is `docs/research/physics.md` with the critic's §4 corrections)
 
@@ -357,6 +389,10 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
   `directionWeights(from, u10, dirs = DIRS16)`; `turbParams` also returns `group, invL, z0r, zb` (invL = 0 for
   neutral); `FallbackModel(env, {radius, spacing, heatCell, receptor, hMin})`, `receptor()` also returns
   `queue, canyon, n`, `slice()` samples cell centres, `sliceAsync()`.
+- As implemented after the physics review (2026-09-28): `mod_calFor(source, cal, calibrated, lut)` applies the 3D
+  fit (top-level β, U0 with `model: "lbm"`, `status: "calibrated"`) only when the LUT in use is on the grid the fit
+  was made on (`CAL.lbm.lut_meta.grid` = `LUT.meta.grid`). Otherwise it returns the priors (β = 1, U0 = 1.4 m/s)
+  with status `'uncalibrated'`, so a re-exported LUT never silently inherits another grid's β (docs/07 §12).
 
 ### 6.2 GPU physics [flow] + [scalar]
 
@@ -418,12 +454,6 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
   - `class WindStreaks` (port)
   - `class LabelLayer` (port)
   - `concColor(value, scale, out)` · `CONC_SCALES[pollutant]` (break points from EAQI bands) · `legendHTML(pollutant)`
-- As implemented after the UI review (2026-09-28): visuals.js also exports `INC_SCALES` (linear 0…max scales for the
-  default "local sources" slice: NO₂ 80, NOx 300, PM₁₀ 30, PM₂.₅ 20 µg/m³, CO 0.3 mg/m³, benzene 2 µg/m³), `concT`,
-  `legendHTML(p, {what: 'inc' | 'total', bg, h, compact})` and `ConcSlice.setDim(on)` (a paler slice while a new field
-  computes). `LabelLayer.update` takes an optional `blockers` argument (screen rectangles of the cards and the north
-  arrow). main.js adds `state.sliceWhat = 'inc' | 'total'`. charts.js time axes choose a tick step of 3 h … 1 year
-  from the plot width, so labels stay at least 44 viewBox px apart.
 - As implemented (docs/12-rendering.md): city.js also exports `cityView(id)` (call before drawing each view),
   `setXray(on)`, `async setLod2(on) → bool`, `decodeLod2(src)`, `buildingLegendHTML(mode)`, `CITY_SOURCE_GROUPS`;
   `buildCity()` also returns `treesRoot` and `overlays.sources`; `cityGeometry().trees[]` carry the crown base `cb`
@@ -434,6 +464,11 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
   `LabelLayer.addAll/remove/clear/relabel`; `LabelLayer.update` hides labels that would overlap a label of higher
   priority (station, scenario, road, park, water, POI). `Particles.update` and `WindStreaks.update` take
   `(dt, windField, u10, visible)`; `new WindStreaks(parent)`.
+- As implemented after the UI review (2026-09-28): visuals.js also exports `INC_SCALES` (linear 0…max scales for the
+  default "local sources" slice: NO₂ 80, NOx 300, PM₁₀ 30, PM₂.₅ 20 µg/m³, CO 0.3 mg/m³, benzene 2 µg/m³), `concT`,
+  `legendHTML(p, {what: 'inc' | 'total', bg, h, compact})` and `ConcSlice.setDim(on)` (a paler slice while a new field
+  computes). `LabelLayer.update` takes an optional `blockers` argument (screen rectangles of the cards and the north
+  arrow). The main.js and charts.js parts of the same review are in §6.4.
 
 ### 6.4 UI [ui] (page.html, style.css, data.js, charts.js, main.js)
 
@@ -462,6 +497,9 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
   only, deterministic), `debug` (internals on `window.__z1dbg`), `sweep=lut`, and for dist/test.html `selftest`,
   `only=`, `skip-slow`. On a software renderer the 3D is redrawn at most every 1.5 s while Aero is busy (every 10 s
   under `?sweep=lut`), because drawing starves the LBM (measured ~80× faster without drawing).
+- As implemented after the UI review (2026-09-28; docs/08-user-guide.md, docs/12-rendering.md §6.1): main.js adds
+  `state.sliceWhat = 'inc' | 'total'` (the slice shows the local increment by default), and charts.js time axes choose
+  a tick step of 3 h … 1 year from the plot width, so labels stay at least 44 viewBox px apart.
 
 ## 7. Conventions
 
@@ -495,6 +533,9 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 | Scene/UI | `src/js/tests/ui.test.js` + `tests/browser/smoke.py` | boot, first field, no page errors, screenshot |
 | End to end | `tests/browser/e2e.py` (`make e2e`) | today's field and one geometry scenario's field, finite station values in both views, scenario coverage > 0, no page or app errors, no horizontal scroll at 390 px, screenshots at 1440×900 and 390×844 |
 
+The commands, the current test counts and the environment variables of the headless browser are in
+[10 Runbook](10-runbook.md) §10.5.
+
 ## 9. Documentation chapters (docs/)
 
 | File | Owner (first draft) | Content |
@@ -508,8 +549,8 @@ Steady advection–diffusion on the frozen mean flow, with K-theory closure.
 | `06-chemistry.md` | models | NO–NO₂–O₃, background, thresholds, EAQI |
 | `07-calibration.md` | models | Protocol, metrics, results (auto from calibration.json), baseline |
 | `08-user-guide.md` | ui | Every control explained, with screenshots |
-| `12-rendering.md` | scene | Renderer, materials, city meshes, scenarios, colour scales, slice, particles, labels |
 | `09-limitations.md` | lead | Honest list |
 | `10-runbook.md` | lead | Refresh data, recalibrate, export the LUT, build, deploy, troubleshoot |
 | `11-process.md` | lead | The step-by-step process by which this repo was researched and built |
+| `12-rendering.md` | scene | Renderer, materials, city meshes, scenarios, colour scales, slice, particles, labels |
 | `glossary.md`, `references.md` | lead | |

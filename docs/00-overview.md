@@ -1,4 +1,4 @@
-# 0. Overview
+# 00 · Overview
 
 **Zrak na raskrižju / Air at the crossroads** shows, in 3D, how traffic and heating pollution spreads around the
 **ZAGREB-1** air-quality monitoring station at the corner of Vukovarska and Miramarska in Zagreb. It compares the
@@ -40,8 +40,14 @@ The page is one self-contained HTML file.
 
 4. NO₂ comes from NOx through a finite-reaction-time NO–NO₂–O₃ scheme. The total is the measured suburban background
    (ZAGREB-4) plus the local increment.
-5. A receptor lookup table (Γ at the station for 16 directions × 3 stability groups) is precomputed. It is used for
-   instant forecasts and for the calibration of β and U₀ against held-out ISZZ data.
+5. A receptor lookup table (Γ at the station for 16 directions × 3 stability groups × 4 source groups) is
+   precomputed. It is used for instant forecasts and for the calibration of β and U₀ against held-out ISZZ data.
+
+The source groups are **A** Vukovarska, **B** Miramarska, **C** all other motor roads and **D** domestic heating. The
+stability groups are **AC** (unstable), **D** (neutral) and **EF** (stable). Every time is UTC and **hour-ending**, as
+in ISZZ: the value stamped 10:00 is the mean of 09:00–10:00 ([glossary](glossary.md)). The details are in
+[03 Wind](03-flow-lbm.md) (step 1), [04 Dispersion](04-dispersion.md) (step 2), [05 Emissions](05-emissions.md) and
+[06 Chemistry](06-chemistry.md) (steps 3–4) and [07 Calibration](07-calibration.md) (step 5).
 
 ## 0.3 The pieces
 
@@ -106,3 +112,22 @@ flowchart LR
 | Measured (2025) | NO₂ 31.7, NOx 71, PM₁₀ 27.0, PM₂.₅ 18.4 µg/m³ (annual means) |
 | Local increment | Over ZAGREB-4 (suburban background): NOx +46, NO₂ +15, PM₁₀ +1.4, PM₂.₅ +2.7 µg/m³. NOx is local traffic; PM is mostly regional and domestic heating. |
 | Meteorology | Weak winds (mean about 1.7 m/s at 10 m in IFS), mainly NE or SW; frequent winter inversions |
+
+## 0.5 Current state and how to run it
+
+- **Geometry:** `env.json` of 2026-09-28 (after the frame fix): 4,275 building parts (4,196 ZG3D, 79 OSM), 3,255
+  roads, 1,807 trees, 116 heating tiles ([02 Geometry](02-geometry.md) §2.0).
+- **Measurements:** ISZZ 2023-01-01 → 2026-09-27, the page embeds the last 400 days ([01 Data sources](01-data-sources.md)).
+- **Model:** the embedded receptor LUT is the first one, on the 10 m grid, computed on the geometry before the frame
+  fix. A 5 m LUT is being exported; when it is in, the calibration is redone and [07 Calibration](07-calibration.md)
+  §9 is regenerated. Quote calibration numbers from there.
+- **Tests:** 120 Python unit tests and 85 in-page tests (78 fast, 7 slow), plus an end-to-end browser test
+  ([10 Runbook](10-runbook.md) §10.5).
+
+```sh
+python3 tools/build.py                 # src/ -> dist/index.html
+python3 -m http.server 8000 -d dist    # open http://localhost:8000
+```
+
+Every other command (data refresh, LUT export, calibration, tests, deploy) is in [10 Runbook](10-runbook.md). How
+the repository was researched and built is in [11 Process](11-process.md).

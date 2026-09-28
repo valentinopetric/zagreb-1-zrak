@@ -1,8 +1,16 @@
 # 12 · Rendering: the 3D scene, the scenarios and the visual encodings
 
+This chapter describes how the page draws the two 3D views: the scene, light and materials, the city (LoD1 prisms,
+the optional LoD2 roofs, roads, trees, the station), the six scenarios and the geometry each hands to the wind
+tunnel, and the visual encodings (the concentration slice and its colour scales, particles, wind streaks, labels).
+The flow and dispersion fields it displays come from [03 Wind](03-flow-lbm.md) and
+[04 Dispersion](04-dispersion.md); how a user operates the views is in [08 User guide](08-user-guide.md).
+
 *First draft by the scene owner (`src/js/scene.js`, `src/js/city.js`, `src/js/visuals.js`,
 `src/js/tests/scene.test.js`). The binding interface is `docs/architecture.md` §6.3; this chapter
-explains what is behind it, why each number has the value it has, and how to check it.*
+explains what is behind it, why each number has the value it has, and how to check it. Counts of prisms, vertices
+and triangles marked "first build" were measured on an earlier env.json (4,309 parts); the current one, after the
+frame fix of 2026-09-28 (docs/02 §2.3), has 4,275 parts and 1,807 trees, and its LoD2 mesh 72,810 triangles.*
 
 ---
 
@@ -163,7 +171,7 @@ extents derived from it (lidar-3d §3.2).
 | | LoD1 prisms (default) | LoD2 mesh (optional) |
 |---|---|---|
 | What | footprint (RDP 0.6 m) extruded from `b` to `h` (`h` = Z_Max − DTM) | ZG3D faces triangulated, int16 decimetres |
-| Coverage | all 4,309 parts in the ±750 m box | 72,947 triangles within 500 m (1.39 MB) |
+| Coverage | all 4,275 parts in the ±750 m box | 72,810 triangles within 500 m (1.38 MB) |
 | Used by the flow | **yes**: `cityGeometry()` → voxel.js | no |
 | Why | the LBM runs on 5 m cells; roof shape below one cell is not resolved, and a prism is what the voxeliser scan-converts. The display then shows exactly the obstacles the flow sees. | pitched roofs, towers and setbacks make the neighbourhood recognisable close up |
 
@@ -178,7 +186,8 @@ what the wind simulation uses.
 For each `ENV.buildings[i] = {p, b, h, s, k, id}`:
 
 1. **Validate.** The ring must have ≥ 3 finite points and area > 0.5 m², with the repeated end point
-   dropped, and *h* > *b* ≥ 0. Two of the 4,309 parts fail this and are dropped (see `skipped`).
+   dropped, and *h* > *b* ≥ 0. In the first build two of 4,309 parts failed this and were dropped (see
+   `skipped`).
 2. **Station container filter** (critic §4.2, "Container: excluded from the mask"). A part is
    treated as the container, or as something standing in its place, and dropped when:
    - its OSM id ends in `SITE.station.osm_way` (1409603653); or
@@ -207,14 +216,15 @@ For each `ENV.buildings[i] = {p, b, h, s, k, id}`:
    keeps the building index and a roof flag, so `colorBuildings()` rewrites the colour attribute
    without rebuilding.
 
-Result for the current `env.json`: 4,307 prisms, 222,549 vertices, 74,175 triangles, 2 draw calls.
+Result for the first build's `env.json`: 4,307 prisms, 222,549 vertices, 74,175 triangles, 2 draw calls (73,693
+triangles after the rebuild, §8).
 
 **Colour modes** (`colorBuildings(mode)`, legend from `buildingLegendHTML(mode)`):
 
 | Mode | Classes and colours | Reason |
 |---|---|---|
 | `plain` | reference palette above | – |
-| `year` | 2008 aerial photogrammetry `#2a78d6` (3,042 parts) · 2019 drone survey `#eb6834` (231) · 2022 LiDAR + multisensor `#1baf7a` (953) · OSM fallback, not in ZG3D `#a19f98` (78) | ZG3D `Godina_izv` (lidar-3d §3.2). The three years use slots 1–3 of the validated categorical palette (dataviz skill; all-pairs CVD ΔE ≥ 9.2). The OSM fallback (height 3.0·levels + 5.5 m, critic §1.9) is neutral grey on purpose: "not measured". |
+| `year` | 2008 aerial photogrammetry `#2a78d6` (3,020 prisms in the current env.json) · 2019 drone survey `#eb6834` (229) · 2022 LiDAR + multisensor `#1baf7a` (947) · OSM fallback, not in ZG3D `#a19f98` (79) | ZG3D `Godina_izv` (lidar-3d §3.2). The three years use slots 1–3 of the validated categorical palette (dataviz skill; all-pairs CVD ΔE ≥ 9.2). The OSM fallback (height 3.0·levels + 5.5 m, critic §1.9) is neutral grey on purpose: "not measured". |
 | `height` | < 6, 6–12, 12–20, 20–30, 30–45, ≥ 45 m on blue steps 100/200/300/400/500/650 of the reference palette | breaks around the ZG3D distribution (median 5.6 m, p95 24.4 m, max 98 m; lidar-3d §3.2): 1–2 storeys, 3–4, 5–6, 7–10, 11–15, taller |
 
 Walls are 20–30 % lighter than roofs in the data modes, so the shading still shows the form.
@@ -282,7 +292,7 @@ When `w` is missing: lanes × 3.25 m (architecture §4.1), else the reference's 
 
 ### 3.5 Trees
 
-- **Sources.** Trees come from `ENV.trees` (1,828 today: 1,827 OSM plus the station tree). If the
+- **Sources.** Trees come from `ENV.trees` (1,807 today: 1,806 OSM plus the station tree). If the
   geo pipeline did not already include the station tree (`env.station.tree`, critic §1.6: an ≈ 18 m
   crown 5 m W and 10 m N of the inlet), it is added.
 - **Crown model.** The crown is an ellipsoid with horizontal radius *r* and vertical semi-axis
@@ -640,8 +650,8 @@ plus `legend-buildings`, `legend-particles` and `legend-dot`.
   faintly rather than cut hard.
 - **Rebuilds.** The texture is rebuilt only when the field, height, `valueFn` or scale change, so
   the caller should keep the same function object until its inputs change.
-- **Scale.** `scale` is a `CONC_SCALES` entry (bands) or an `INC_SCALES` entry (continuous log); `concColor`
-  handles both.
+- **Scale.** `scale` is a `CONC_SCALES` entry (bands) or an `INC_SCALES` entry (continuous, linear from zero, §6.1);
+  `concColor` handles both.
 - **Stale fields.** `setDim(true)` draws the slice at 45 % opacity. main.js uses it while the page shows the previous
   run's field during a new computation, the map counterpart of the grey numbers.
 - **Alignment check** (headless, 2026-09-28): the texture colour at a texel equals the colour of
@@ -725,12 +735,12 @@ units, 2–10 px. 4,000 particles per view.
 
 Target: 60 fps on a laptop GPU with the whole neighbourhood and two views.
 
-| Item | Count (current env.json) | How |
+| Item | Count (first build unless noted) | How |
 |---|---|---|
-| LoD1 buildings | 4,307 prisms → 74,175 triangles in **2** draw calls | merged, vertex colours, no per-building objects |
-| Trees | 1,828 → 4 draw calls (near/far crowns + trunks) | `InstancedMesh`, 80 / 20 triangles per crown |
+| LoD1 buildings | 4,307 prisms → 74,175 triangles in **2** draw calls (current env.json: 4,275 parts, 73,693 triangles) | merged, vertex colours, no per-building objects |
+| Trees | 1,828 → 4 draw calls (near/far crowns + trunks); 1,807 in the current env.json | `InstancedMesh`, 80 / 20 triangles per crown |
 | Roads, ground layers | ~15 draw calls | one merged ribbon per material |
-| LoD2 (optional) | 72,947 triangles, 1 draw call | one mesh; LoD1 inner mesh hidden |
+| LoD2 (optional) | 72,810 triangles (current `lod2.bin`), 1 draw call | one mesh; LoD1 inner mesh hidden |
 | **Per view** | 22–27 draw calls, 94k (no trees) to 191k (tree scenario) triangles | measured in the harness from `renderer.info` |
 
 - **Shadow pass.** It repeats the geometry once per view. That is ~0.4 M triangles per view,
@@ -750,7 +760,8 @@ Target: 60 fps on a laptop GPU with the whole neighbourhood and two views.
 
 **In-page tests.** `python3 tests/browser/run_selftest.py --only scene` (SwiftShader) runs 18 tests
 in `src/js/tests/scene.test.js`. All pass with the current data (re-run in the UI review of 2026-09-28, after the
-env.json rebuild to 4,275 buildings; the numbers in the first rows are from the first build):
+env.json rebuild to 4,275 buildings). The prism, triangle, tree and scenario counts in the table are from the first
+build unless marked "after the rebuild"; the LoD2 row is the current `lod2.bin`:
 
 | Test | Result |
 |---|---|
@@ -763,7 +774,7 @@ env.json rebuild to 4,275 buildings; the numbers in the first rows are from the 
 | leaf modes | LAD 1.2 / 0.3 / none; visibility with `cityView` and the `hides` alias |
 | street-tree rule | 365 trees, min kerb clearance 1.03 m, all 8–400 m from the inlet |
 | LoD2 decode, synthetic | decimetre scaling, classes, three input types; bad magic and truncation throw |
-| LoD2 decode, baked | 72,947 triangles, max radius 527 m, heights 0–97.9 m |
+| LoD2 decode, baked | 72,810 triangles, max radius 529 m, heights 0–97.9 m (current `lod2.bin`; 73,469 before the frame fix) |
 | concColor monotonic | 8 pollutants × 2 palettes: band and opacity non-decreasing, OKLab L non-increasing (`cb`); NaN transparent; 6 legend rows |
 | sun position | see §2.2 |
 | ribbonGeometry | all up-facing; area 1,660 ± 30 m² for an L of 160 m × 10 m |
@@ -836,6 +847,8 @@ python3 tests/browser/smoke.py --wait 300 --query "grid=coarse"
 # interactive
 make serve    # then open http://localhost:8000/?grid=coarse
 ```
+
+The whole test suite and the other commands are in [10 Runbook](10-runbook.md).
 
 Changing the data needs no code change:
 

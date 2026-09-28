@@ -1,4 +1,4 @@
-# 2. Geometry: buildings, terrain, streets and trees
+# 02 · Geometry: buildings, terrain, streets and trees
 
 This chapter describes how the repo builds its 3D picture of the neighbourhood around the ZAGREB-1
 air-quality station: `src/data/env.json`, the scene description that every other module reads, and
@@ -6,7 +6,10 @@ air-quality station: `src/data/env.json`, the scene description that every other
 frame, each step of the pipeline, the parameters, the validation results and the known limitations.
 
 > First draft by the geo-data owner (2026-09-27). Every number in the validation sections comes from
-> `data/cache/validation/geometry_validation.json`, which `tools/build_env.py` writes on every run.
+> `data/cache/validation/geometry_validation.json`, which `tools/build_env.py` writes on every run. The numbers below
+> are those of the current `env.json` (generated 2026-09-28T07:26:42Z, after the frame fix of §2.3). The first build
+> (2026-09-27T21:58:45Z, with the reference's compressed frame) had 4,304 buildings and 1,828 trees; chapters 03 and
+> 07 quote some measurements made on it and say so.
 
 ---
 
@@ -14,20 +17,20 @@ frame, each step of the pipeline, the parameters, the validation results and the
 
 | Item | Result |
 |---|---|
-| Buildings | **4,226** ZG3D 2022 LoD1 prisms (from 4,362 parts in the 1.5 km box) + **78** OSM fallback footprints |
-| Source years of the ZG3D parts kept | 2008: 3,040 · **2022 (LiDAR + photo): 953 (22.5 %)** · 2019 (drone): 229 |
-| Heights vs OSM `height` tags | n = 18, median bias **+0.24 m**, MAE **2.1 m** |
-| Levels → height fit on ZG3D | H = **2.98·L + 5.86 m** (critic §1.9: 3.03·L + 5.81); rule used: 3.0·L + 5.5, MAE 3.2 m |
-| Base heights vs DGU DTM | median **−0.08 m**, IQR −0.33…+0.09 m (3,907 ground-standing parts) |
+| Buildings | **4,196** ZG3D 2022 LoD1 prisms (from 4,362 parts in the 1.5 km box) + **79** OSM fallback footprints = **4,275** |
+| Source years of the ZG3D parts kept | 2008: 3,018 · **2022 (LiDAR + photo): 947 (22.6 %)** · 2019 (drone): 227 |
+| Heights vs OSM `height` tags | n = 18, median bias **+0.45 m**, MAE **2.2 m** |
+| Levels → height fit on ZG3D | H = **2.98·L + 5.84 m** (critic §1.9: 3.03·L + 5.81); rule used: 3.0·L + 5.5, MAE 3.2 m |
+| Base heights vs DGU DTM | median **−0.08 m**, IQR −0.33…+0.09 m (3,878 ground-standing parts) |
 | Frame check (OSM vs ZG3D footprints) | best shift **(0.0, −0.25) m** at 0.25 m resolution: the two layers are in the same frame |
-| Motor-road centrelines over ZG3D roofs | 57 m of 36.5 km (**0.16 %**; bridges and building passages) |
+| Motor-road centrelines over ZG3D roofs | 60 m of 36.3 km (**0.16 %**; bridges and building passages) |
 | Terrain | ground **115.59 m** at the station; 107.75–119.61 m inside the box |
-| Morphometry, 500 m disc (Macdonald 1998) | λp **0.234**, λf **0.182**, H̄ **14.3 m**, d **6.6 m**, z0 **1.49 m** (critic §1.10: 0.246, 0.193, 14.2, 6.8, 1.47) |
-| Roads | 3,265 ways; group A 44, B 28 (incl. the orthophoto override), C 1,050, non-motor 2,143 |
-| Trees | 1,828 (OSM nodes and tree rows + the station tree 14 m / r 9 m) |
-| Heating area sources | 114 tiles of low-rise housing, 0.196 km², nearest 182 m from the station |
-| `env.json` | **1.24 MB** (target < 1.5 MB) |
-| `lod2.bin` | **73,469 triangles, 1.40 MB** within 500 m (budget ≈ 2.5 MB) |
+| Morphometry, 500 m disc (Macdonald 1998) | λp **0.234**, λf **0.181**, H̄ **14.3 m**, d **6.6 m**, z0 **1.49 m** (critic §1.10: 0.246, 0.193, 14.2, 6.8, 1.47) |
+| Roads | 3,255 ways; group A 43, B 28 (incl. the orthophoto override), C 1,048, non-motor 2,136 |
+| Trees | 1,807 (OSM nodes and tree rows + the station tree 14 m / r 9 m) |
+| Heating area sources | 116 tiles of low-rise housing, 0.197 km², nearest 183 m from the station |
+| `env.json` | **1.23 MB** (target < 1.5 MB) |
+| `lod2.bin` | **72,810 triangles, 1.38 MB** within 500 m (budget ≈ 2.5 MB) |
 
 ![Top-down check of the whole box](img/geo_overview.png)
 
@@ -63,7 +66,7 @@ of it comes from one file with one frame.
   `data/cache/` (gitignored), so `build_env.py` runs offline and is reproducible.
 - **Outputs:** `env.json` follows `docs/architecture.md` §4.1 exactly. The only representation
   choice beyond the schema is the keyhole ring for courtyards (§2.7.1). `lod2.bin` follows the binary
-  layout of §4.1.
+  layout of architecture §4.1.
 
 ---
 
@@ -85,13 +88,13 @@ The user asked for a LiDAR-based model. The **raw national LiDAR** is not anonym
 (§2.2.2). ZG3D is the next best thing, and in practice better suited to a voxel model:
 
 - It is a **LiDAR-updated 3D city model**. The City re-modelled the 2022 version against the
-  2022 national LiDAR point cloud. In our box **22 % of the parts (953 of 4,222 kept) carry source
+  2022 national LiDAR point cloud. In our box **22.6 % of the parts (947 of 4,192 kept) carry source
   "Multisenzorsko snimanje" (LiDAR + photogrammetry, 2022)**. 72 % are 2008 aerial
   photogrammetry and 5 % are 2019 drone surveys (critic G2, lidar-3d §3.2). The source year travels
   with every part (`buildings[].s`) and the UI can colour by it.
 - It is LoD2.2 **building parts**, already split at height breaks. One LoD1 prism per part is
   therefore "LoD1.3", enough for 5 m voxels.
-- It checks out against independent data (§2.9): 0.24 m median bias against OSM height tags, and
+- It checks out against independent data (§2.9): 0.45 m median bias against OSM height tags, and
   base heights within 0.1 m of the DGU terrain.
 
 ### 2.2.2 The raw DGU LiDAR: request route and licence caveat
@@ -269,15 +272,17 @@ every part:
 |---|---|
 | Raw parts in the box | 4,362 |
 | Bad Z (Z_Min or Z_Max ≤ 0; lidar-3d §3.2) | 1 |
-| Centroid outside the ±750 m square | 67 |
+| Centroid outside the ±750 m square | 97 |
 | Outer ring degenerate after RDP 0.6 m, or area < 1 m² | 22 |
 | h < 1 m | 46 |
 | Thinner than 0.2 m after rounding (sheets) | 5 |
-| **Kept** | **4,222 parts = 4,226 prisms** (MultiPolygon parts give one prism per polygon) |
+| **Kept** | **4,192 parts = 4,196 prisms** (MultiPolygon parts give one prism per polygon) |
 
-Of the kept prisms, 396 float (b ≥ 1 m). Heights: median 5.6 m, p95 24.2 m, max 97.9 m (Eurotower).
+Of the kept prisms, 395 float (b ≥ 1 m). Heights: median 5.5 m, p95 24.4 m, max 97.9 m (Eurotower). The
+exact frame (§2.3) makes the ±750 m square 0.17 %/0.55 % smaller in degrees than the first build's, so 30 more
+parts fall outside it.
 
-- **Courtyards (holes).** The schema has one ring per prism. 72 holes ≥ 4 m² are therefore joined to
+- **Courtyards (holes).** The schema has one ring per prism. 73 holes ≥ 4 m² are therefore joined to
   their outer ring by zero-width bridges, making a *keyhole ring*. The bridges are the same as the
   triangulator's (§2.7.8).
   - With the even-odd rule (core.js `pointInPoly`, every scanline voxeliser) the courtyard stays open,
@@ -292,7 +297,7 @@ Of the kept prisms, 396 float (b ≥ 1 m). Heights: median 5.6 m, p95 24.2 m, ma
 its 1 m cells covered by *any* ZG3D footprint (roof cover) is below 0.5. The cover mask includes the
 parts dropped above, so buildings at the box edge are not mistaken for missing ones.
 
-- 1,831 OSM buildings are in the box and 1,753 are covered. **78 are added**, 57 of them smaller than
+- 1,813 OSM buildings are in the box and 1,734 are covered. **79 are added**, 57 of them smaller than
   60 m² (kiosks, sheds, shelters, bus-station roofs).
 - Excluded: `building=no`; construction sites without height or levels; **the station container**
   (OSM way 1409603653). The container is not in ZG3D either: no nDSM cell within 39.9 m of the origin
@@ -303,7 +308,7 @@ parts dropped above, so buildings at the box edge are not mistaken for missing o
 |---|---|---|
 | `height` tag | the tag | OSM |
 | `building=roof` (canopy) | 5 m, with b = h − 1 m (a slab the flow passes under) | judgement |
-| footprint < 60 m² | 3 m per level (1 level if untagged), no roof term | the 5.5 m intercept of the §1.9 fit comes from pitched roofs and tall ground floors of ordinary buildings |
+| footprint < 60 m² | 3 m per level (1 level if untagged), no roof term | the 5.5 m intercept of the critic §1.9 fit comes from pitched roofs and tall ground floors of ordinary buildings |
 | `building:levels` = L | **3.0·L + 5.5 m** | critic §1.9 (fit to ZG3D p90 roofs) |
 | type default | house/detached 7 m, apartments/residential/office 14.3 m, school 12 m, university 14 m, church/hospital 18 m, commercial/retail 10 m, industrial/warehouse 9 m, garage/shed/kiosk 3 m | site-context §4.3, §9.1; reference `extract_env.py` |
 | untagged `yes` | 14.3 m (4 storeys) | site-context §4.3 |
@@ -338,8 +343,9 @@ counts (critic G1): these are model defaults that the UI exposes as sliders.
 | One-way carriageway | 50 % of the link | critic §4.6 |
 | `*_link` slips | 25 % of the class default (6 250 for secondary_link) | judgement: one turning movement; no counts (G1) |
 
-Result: A 44 ways (22,500 or 23,500 each: every Vukovarska way is one carriageway), B 28 ways, C 1,050.
-Traffic-weighted length (veh·km/day inside the box): A 69,251, B 31,197, C 216,792.
+Result: A 43 ways (22,500 or 23,500 each: every Vukovarska way is one carriageway), B 28 ways, C 1,048.
+Traffic-weighted length (veh·km/day inside the box): A 69,253, B 31,350, C 215,769. The AADT defaults are also
+listed, by link, in [05 Emissions](05-emissions.md) §3, which turns them into source strengths.
 
 **Carriageway override at the station** (critic §1.6, §4.3 step 4). The 0.1 m city orthophoto 2022
 (research `critic/zg_orto2022_80m_marked.jpg`) shows, east of the station:
@@ -350,12 +356,13 @@ Traffic-weighted length (veh·km/day inside the box): A 69,251, B 31,197, C 216,
 - a median;
 - the northbound carriageway at **+26.5 to +34 m** (2 lanes).
 
-OSM places the southbound centreline at x = 22.71 m (at z = 0), **3.96 m east of the true centre**
-(18.75 m). The northbound centreline is at 28.44 m, 1.81 m west of the true centre (30.25 m). North of
-z = −10 m OSM also merges both carriageways into one 6-lane way.
+OSM places the southbound centreline at x = 22.75 m (at z = 0), **4.00 m east of the true centre**
+(18.75 m). The northbound centreline is at 28.49 m, 1.76 m west of the true centre (30.25 m). North of
+z = −10 m OSM also merges both carriageways into one 6-lane way. (These are the values in the exact frame; the
+first build's compressed frame gave 22.71 m and 28.44 m.)
 
 - Within |z| ≤ 40 m (the verified extent) and 5 < x < 45 m, the OSM Miramarska geometry is cut out
-  (133.7 m of centreline from ways 949828012, 195556406 and 924732206).
+  (133.9 m of centreline from ways 949828012, 195556406 and 924732206).
 - It is replaced by two carriageways:
   - southbound: x = 18.75 m (stored 18.8), w = 13.5 m, 4 lanes, drawn north → south, AADT 12 000;
   - northbound: x = 30.25 m (stored 30.2), w = 7.5 m, 2 lanes, drawn south → north, AADT 8 000.
@@ -385,12 +392,13 @@ visible in the orthophoto.*
   plausible `height` (2–45 m, 10 trees) or `diameter_crown` tag exists.
 - **Tree rows.** `natural=tree_row` ways (13) are sampled every 8 m (86 trees).
 - **Dropped:**
-  - 67 trees whose position lies inside a ZG3D footprint (they would sit inside a solid);
+  - 66 trees whose position lies inside a ZG3D footprint (they would sit inside a solid);
   - 3 inside the station tree's crown (the same tree).
 - **The station tree** `{x: −5, z: −10, h: 14, r: 9, k: "station"}` (critic §1.6: 18 m crown about 5 m W
   and 10 m N of the inlet; G8: 14 m by default, since the Meta CHM reads only 7.6 m). It is also in
   `station.tree`.
-- Total **1,828**. CHM trees (`k: "chm"`) are not produced: the Meta CHM needs a raster library and
+- Total **1,807** (the ±750 m square of the exact frame is slightly smaller than the first build's, §2.3).
+  CHM trees (`k: "chm"`) are not produced: the Meta CHM needs a raster library and
   under-reads the station tree (critic D15, G8).
 
 ### 2.7.4 Tram, rail, green, water, paved
@@ -399,9 +407,9 @@ visible in the orthophoto.*
 |---|---|---|
 | `tram` | `railway=tram` incl. sidings, clipped, RDP 1 m | 38 |
 | `rail` | `railway=rail/light_rail` incl. yard, siding, spur (not disused, abandoned, razed, platforms) | 97 |
-| `green` | leisure park/garden, landuse grass/recreation_ground/village_green/meadow/forest/flowerbed/allotments/cemetery, natural wood/scrub/grassland/heath | 803 |
+| `green` | leisure park/garden, landuse grass/recreation_ground/village_green/meadow/forest/flowerbed/allotments/cemetery, natural wood/scrub/grassland/heath | 799 |
 | `water` | natural=water, landuse basin/reservoir, fountains, swimming pools | 29 |
-| `paved` | surface parking, `area:highway`, pedestrian areas, squares | 319 |
+| `paved` | surface parking, `area:highway`, pedestrian areas, squares | 317 |
 
 Polygons are RDP-simplified at 1 m and clipped to the box (Sutherland–Hodgman). Holes are ignored for
 these display layers.
@@ -416,31 +424,32 @@ house/detached buildings, low-rise). The confidence is low (critic G14).
    - Low-rise means a ground-standing prism with h ≤ 11.5 m (3.0 × 2 + 5.5, i.e. at most two storeys by
      critic §1.9) and a footprint ≥ 30 m².
    - Smaller footprints are sheds and garages, not heated dwellings.
-   - 22 polygons qualify.
+   - 20 polygons qualify.
 2. **Tiles.** Each candidate is cut into 50 m tiles aligned to the origin (a Trnje house block, 10 LBM
    cells). A tile is kept if it holds ≥ 150 m² of low-rise footprint, i.e. at least one house.
    - Why tiles: one OSM residential polygon of 0.11 km² reaches from Martinovka down to the station.
    - Spreading its heating evenly would put a heating source next to the inlet, over a park and a
      9-storey slab.
-   - With tiles, the nearest heating area is **182 m** from the station.
+   - With tiles, the nearest heating area is **183 m** from the station.
 3. **Weight.**
 
-       w = λp,low(tile) / λp,low,ref,   λp,low,ref = Σ low-rise footprint / Σ tile area = 0.367,   capped at 3
+       w = λp,low(tile) / λp,low,ref,   λp,low,ref = Σ low-rise footprint / Σ tile area = 0.368,   capped at 3
 
    - The area-weighted mean of w over the heating area is therefore 1. The q_D of
      `groupStrengths()` (emissions.js) is the **mean** areal rate over that area.
    - Denser house quarters emit proportionally more. Households give 74 % of city PM10, and 99 % of that
      comes from wood (site-context §6).
-   - w ranges 0.22–2.5 (median 0.95).
+   - w ranges 0.22–3.0 (the cap; median 1.0).
 
-Result: **114 tiles, 0.196 km²**. Most lie in Trnje S/SE of the station (150–700 m, as critic §4.6
+Result: **116 tiles, 0.197 km²**. Most lie in Trnje S/SE of the station (150–700 m, as critic §4.6
 expects) and in the Martinovka house quarter NW.
 
 ### 2.7.6 POIs, labels, station
 
-- **`pois`** (14): `amenity=school/kindergarten/fuel/hospital` (and `healthcare=hospital`, or clinics
-  named "bolnica"). Name, else brand or operator. De-duplicated within 20 m.
-- **`labels`** (49):
+- **`pois`** (14: 6 schools, 5 kindergartens, 1 hospital, 2 fuel stations):
+  `amenity=school/kindergarten/fuel/hospital` (and `healthcare=hospital`, or clinics named "bolnica"). Name, else
+  brand or operator. De-duplicated within 20 m.
+- **`labels`** (50: 24 roads, 14 parks, 12 landmarks and POIs):
   - Roads:
     - "Vukovarska" twice (x = −170 and +230 m), placed on the median between the two carriageways;
     - "Miramarska" twice (z = −150 and +190 m);
@@ -477,43 +486,43 @@ as in critic §1.10:
        d/H̄  = 1 + A^(−λp) (λp − 1)
        z0/H̄ = (1 − d/H̄) · exp{ −[0.5 β (C_D/κ²) (1 − d/H̄) λf]^(−1/2) }
 
-   The headline values use the 500 m disc with λf averaged over 16 directions (range 0.153–0.201).
+   The headline values use the 500 m disc with λf averaged over 16 directions (range 0.151–0.201).
 
 | Region | λp | H̄ (m) | λf | d (m) | z0 (m) | critic §1.10 (λp, H̄, λf, d, z0) |
 |---|---|---|---|---|---|---|
-| Disc r = 500 m | **0.234** | **14.3** | **0.182** | **6.6** | **1.49** | 0.246, 14.2, 0.193, 6.8, 1.47 |
-| Disc r = 300 m | 0.257 | 16.3 | 0.203 | 8.0 | 1.64 | 0.267, 16.3, 0.218, 8.3, 1.66 |
+| Disc r = 500 m | **0.234** | **14.3** | **0.181** | **6.6** | **1.49** | 0.246, 14.2, 0.193, 6.8, 1.47 |
+| Disc r = 300 m | 0.257 | 16.3 | 0.202 | 8.0 | 1.64 | 0.267, 16.3, 0.218, 8.3, 1.66 |
 
 Upwind wedges (`morph.sectors`, `from` = wind-from bearing):
 
 | From | 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315 |
 |---|---|---|---|---|---|---|---|---|
-| λp | 0.210 | 0.206 | 0.175 | 0.227 | 0.295 | 0.271 | 0.276 | 0.253 |
+| λp | 0.208 | 0.206 | 0.175 | 0.226 | 0.294 | 0.270 | 0.276 | 0.252 |
 | critic | 0.22 | 0.22 | 0.18 | 0.24 | 0.31 | 0.28 | 0.29 | 0.26 |
-| H̄ (m) | 12.9 | 14.3 | 13.1 | 12.6 | 13.9 | 15.8 | 14.7 | 12.2 |
+| H̄ (m) | 12.8 | 14.3 | 13.1 | 12.6 | 14.0 | 15.8 | 14.7 | 12.2 |
 | critic | 12.8 | 14.3 | 13.0 | 12.5 | 14.0 | 15.8 | 14.7 | 12.1 |
-| λf | 0.146 | 0.177 | 0.096 | 0.162 | 0.178 | 0.239 | 0.190 | 0.217 |
+| λf | 0.143 | 0.176 | 0.095 | 0.162 | 0.177 | 0.239 | 0.189 | 0.215 |
 | critic | 0.17 | 0.19 | 0.11 | 0.18 | 0.21 | 0.26 | 0.20 | 0.24 |
-| d (m) | 5.4 | 5.9 | 4.8 | 5.6 | 7.6 | 8.1 | 7.6 | 5.9 |
+| d (m) | 5.4 | 5.9 | 4.8 | 5.7 | 7.6 | 8.1 | 7.6 | 5.9 |
 | critic | 5.6 | 6.2 | 4.9 | 5.8 | 7.8 | 8.3 | 7.9 | 6.1 |
-| z0 (m) | 1.26 | 1.67 | 1.03 | 1.23 | 1.03 | 1.70 | 1.27 | 1.33 |
+| z0 (m) | 1.24 | 1.67 | 1.02 | 1.24 | 1.03 | 1.70 | 1.27 | 1.33 |
 | critic | 1.35 | 1.70 | 1.07 | 1.28 | 1.13 | 1.73 | 1.26 | 1.34 |
 
-- **Agreement.** λp is within 0.015, H̄ within 0.1 m, d within 0.3 m and z0 within 0.1 m of the
+- **Agreement.** λp is within 0.016, H̄ within 0.1 m, d within 0.3 m and z0 within 0.11 m of the
   critic's independent raster (EPSG:3765, 1 m).
-- **λf** is systematically ~8 % lower. The two samplers differ: nearest-neighbour on a wind-aligned
-  lattice here, against a rotated raster in the critic's run. The critic notes that its approach
-  inflates diagonal directions.
+- **λf** is systematically lower: 6 % for the 500 m disc, 5–16 % per wedge. The two samplers differ:
+  nearest-neighbour on a wind-aligned lattice here, against a rotated raster in the critic's run. The critic
+  notes that its approach inflates diagonal directions.
 - **Direction dependence.** λf still depends on direction (lower along the N–S/E–W street grid, higher
   for diagonal winds, as projected frontal areas should).
 - **LoD1 comparison.** The same statistics on the LoD1 prisms (top = Z_Max for the whole part) give
-  H̄ = 17.8 m, d = 8.4 m and z0 = 1.91 m. LoD1 overstates pitched and stepped roofs. The LoD2 nDSM
+  H̄ = 17.8 m, d = 8.3 m and z0 = 1.90 m. LoD1 overstates pitched and stepped roofs. The LoD2 nDSM
   values describe the real upstream city and are the ones in `env.json`.
 
 ### 2.7.8 The LoD2 display mesh (`lod2.bin`)
 
 **Selection.** Parts whose vertex centroid is within 500 m of the station (`SITE.extent.lod2_radius_m`,
-critic §4.3) and that were kept as LoD1: 1,037 parts.
+critic §4.3) and that were kept as LoD1: 1,031 parts.
 
 **Triangulation** (`fetch_zg3d.triangulate_patches`, stdlib):
 
@@ -540,8 +549,8 @@ critic §4.3) and that were kept as LoD1: 1,037 parts.
 
 - Vertices are placed at y = Z − g, using the part's own DTM(centroid). For ground-standing parts
   (b = 0) the lowest vertices are set to y = 0, so walls neither float nor sink.
-- Bottom faces (all three vertices at y ≤ 0.05 m, 5,418 of them) are dropped.
-- Esri rings are clockwise seen from outside. **997 of 1,037 parts** have a negative signed volume in
+- Bottom faces (all three vertices at y ≤ 0.05 m, 5,311 of them) are dropped.
+- Esri rings are clockwise seen from outside. **991 of 1,031 parts** have a negative signed volume in
   the right-handed (x, y, z) frame and are flipped. Every part then satisfies (b − a) × (c − a) pointing
   outward, which is the three.js front face.
 
@@ -552,9 +561,9 @@ critic §4.3) and that were kept as LoD1: 1,037 parts.
 - `Uint8` class = source year − 2000 [nTri];
 - zero padding to a multiple of 4.
 
-**Result: 73,469 triangles, 1,395,928 bytes**, no clamped coordinate. A headless three.js render
-(`FrontSide`, `computeVertexNormals`) shows correctly shaded roofs and walls, and LoD2 and LoD1 agree
-in position and height.
+**Result: 72,810 triangles, 1,383,408 bytes**, no clamped coordinate (the first build: 73,469 triangles).
+A headless three.js render (`FrontSide`, `computeVertexNormals`) shows correctly shaded roofs and walls,
+and LoD2 and LoD1 agree in position and height.
 
 ### 2.7.9 `meta` and the size budget
 
@@ -569,8 +578,8 @@ in position and height.
 - `attribution`: the three strings;
 - `notes`: the keyhole rings, the override and the AADT caveat.
 
-Size by key: buildings 653 KB, roads 372 KB, trees 83 KB, green 81 KB, paved 25 KB, heating 9 KB,
-others < 5 KB each. **Total 1.24 MB.** Coordinates are rounded to 0.1 m and whole numbers are
+Size by key: buildings 649 KB, roads 371 KB, trees 82 KB, green 80 KB, paved 25 KB, heating 9 KB,
+others < 5 KB each. **Total 1.23 MB.** Coordinates are rounded to 0.1 m and whole numbers are
 written without ".0".
 
 ---
@@ -615,48 +624,48 @@ footprint (lidar-3d §3.2, critic §1.9).
 
 | Comparison | n | Result | Research value |
 |---|---|---|---|
-| OSM `height` tag | 18 | median bias (ZG3D − tag) **+0.24 m**, MAE **2.13 m** | n = 21, +0.2 m, 2.1 m |
+| OSM `height` tag | 18 | median bias (ZG3D − tag) **+0.45 m**, MAE **2.15 m** | n = 21, +0.2 m, 2.1 m |
 | Worst cases | | 29 → 42.3 m, 22 → 31.6 m, 50 → 53.5 m | the same two outliers (likely eave heights or out-of-date tags) |
-| `building:levels` (no height tag), least-squares fit | 296 | H = **2.98·L + 5.86 m**, MAE 3.17 m | 302, 3.03·L + 5.81, MAE 3.1 |
-| Rule 3.0·L + 5.5 m | 296 | MAE 3.18 m, median bias −0.28 m | — |
-| Reference rule 3.1·L + 1.5 m | 296 | MAE 4.48 m | 4.5 m |
-| Median H / L | 296 | 4.81 m per level | 4.79 |
+| `building:levels` (no height tag), least-squares fit | 291 | H = **2.98·L + 5.84 m**, MAE 3.18 m | 302, 3.03·L + 5.81, MAE 3.1 |
+| Rule 3.0·L + 5.5 m | 291 | MAE 3.19 m, median bias −0.26 m | — |
+| Reference rule 3.1·L + 1.5 m | 291 | MAE 4.45 m | 4.5 m |
+| Median H / L | 291 | 4.81 m per level | 4.79 |
 
 ### 2.9.2 Base heights
 
-Z_Min − DTM(centroid) for all 4,277 parts that passed the Z and area filters:
+Z_Min − DTM(centroid) for all 4,247 parts that passed the Z and area filters:
 
 | Subset | n | Median | IQR | p5 | p95 |
 |---|---|---|---|---|---|
-| Ground-standing (< 3 m) | 3,907 | **−0.08 m** | −0.33…+0.09 m | −0.96 m | +0.48 m |
-| All | 4,277 | −0.05 m | −0.30…+0.16 m | −0.90 m | +11.6 m |
+| Ground-standing (< 3 m) | 3,878 | **−0.08 m** | −0.33…+0.09 m | −0.96 m | +0.48 m |
+| All | 4,247 | −0.05 m | −0.30…+0.16 m | −0.90 m | +11.6 m |
 
 The research value (lidar-3d §3.2) is −0.06 m median with IQR −0.28…+0.10 m for 3,907 ground-standing
-parts. ZG3D and the DGU DTM are both HVRS71 and agree to about 0.1 m. 401 parts have a base ≥ 1 m
-(370 > 3 m; the research found 374).
+parts. ZG3D and the DGU DTM are both HVRS71 and agree to about 0.1 m. 400 parts have a base ≥ 1 m
+(369 > 3 m; the research found 374).
 
 ### 2.9.3 Parts by source year
 
 | Source year (`Godina_izv`) | Izvor | In the box | Kept | Share kept |
 |---|---|---|---|---|
-| 2008 | aerofotogrametrijsko snimanje | 3,151 | 3,040 | 72.0 % |
-| 2022 | Multisenzorsko snimanje (LiDAR + photo) | 978 | 953 | **22.5 %** |
-| 2019 | Dron snimanje 2019 / bespilotna letjelica | 233 | 229 | 5.4 % |
+| 2008 | aerofotogrametrijsko snimanje | 3,151 | 3,018 | 72.0 % |
+| 2022 | Multisenzorsko snimanje (LiDAR + photo) | 978 | 947 | **22.6 %** |
+| 2019 | Dron snimanje 2019 / bespilotna letjelica | 233 | 227 | 5.4 % |
 
 ### 2.9.4 Alignment in the local frame
 
 - **Footprints.** The ZG3D footprint mask (ground-standing prisms) and the OSM building mask are
   rasterised at 0.25 m within ±300 m. The overlap (IoU) is computed for every shift of the OSM mask
   within ±3 m (625 shifts, rows as Python big-integer bit sets).
-  - IoU 0.599 at zero shift, best 0.601 at **(dx, dz) = (0.0, −0.25) m**. The layers agree to one
+  - IoU 0.600 at zero shift, best 0.602 at **(dx, dz) = (0.0, −0.25) m**. The layers agree to one
     raster cell.
   - The IoU is below 1 because OSM and ZG3D delineate buildings differently: parts vs whole
     buildings, and roof overhangs.
-- **Roads vs roofs.** 57 m of 36.47 km of motor-road centreline (c ≤ 3) runs over ZG3D roofs
+- **Roads vs roofs.** 60 m of 36.28 km of motor-road centreline (c ≤ 3) runs over ZG3D roofs
   (0.16 %). These are short passages under buildings or canopies: Trg Stjepana Radića at
   (238, −86), the Miramarski podvožnjak at (−10, −451), and two residential streets at the box edge.
   A frame offset of even a few metres would put several percent of the avenues under buildings.
-- **Orthophoto.** See §2.7.2 and Figures 2.2–2.3. The OSM southbound Miramarska centreline is 3.96 m
+- **Orthophoto.** See §2.7.2 and Figures 2.2–2.3. The OSM southbound Miramarska centreline is 4.00 m
   east of the carriageway centre (the critic estimated about 3 m).
 - **3D render.** LoD1 and LoD2 were drawn together in headless three.js from the same camera. Positions,
   heights and courtyards agree.
@@ -676,7 +685,7 @@ parts. ZG3D and the DGU DTM are both HVRS71 and agree to about 0.1 m. 401 parts 
 
 - **ZG3D epoch.** 72 % of the parts are the 2008 model. The City re-modelled against the 2022 LiDAR, but
   it is unclear whether the 2008 parts were checked or just kept (lidar-3d §8.2). New buildings since
-  2022 appear only if OSM has them (the 78 fallbacks). Buildings demolished since 2008 may remain.
+  2022 appear only if OSM has them (the 79 fallbacks). Buildings demolished since 2008 may remain.
 - **LoD1 = Z_Max per part.** Pitched roofs become boxes as high as the ridge. That is fine for 5 m
   voxels, but it makes the LoD1 city about 3.5 m "higher" on average than the nDSM (§2.7.7).
 - **Keyhole rings** are a schema-preserving trick. A consumer that simplifies or offsets rings (for
@@ -695,7 +704,10 @@ parts. ZG3D and the DGU DTM are both HVRS71 and agree to about 0.1 m. 401 parts 
   - The override is checked only within ±40 m.
 - **Heating** tiles depend on OSM `landuse=residential` coverage and on the low-rise heuristic. The weight
   is relative to the heating area. Rates are order-of-magnitude only (critic G14).
-- **Frame scale.** The local frame is 0.17 % (E–W) and 0.55 % (N–S) short of true metres (§2.3).
+- **Frame.** Since 2026-09-28 the local frame uses the exact WGS84 metres per degree and is isometric to about
+  0.01 % within the scene (§2.3). The first build's frame was 0.17 % (E–W) and 0.55 % (N–S) short of true metres;
+  the embedded 10 m LUT and its calibration were computed on that geometry (docs/07 §11.1). The remaining
+  approximation is the flat ground (the terrain varies by 14 m over the box).
 - **OSM staleness.** The fallback Overpass mirror can be months old. The fetch meta records it.
 - **Service stability.** The ArcGIS item may be renamed with the next ZG3D release (lidar-3d §8.3). The
   committed `env.json` and `lod2.bin` keep the app working. Fallback F1 is the district shapefiles on
@@ -719,6 +731,8 @@ given. `build_env.py` never touches the network. After a refresh:
 
 1. Check the log for "stale mirror" warnings and for count mismatches.
 2. Compare `geometry_validation.json` with the numbers in this chapter.
+3. Re-export the receptor LUT and recalibrate: the model's responses depend on the geometry
+   ([10 Runbook](10-runbook.md) §10.3–10.4).
 
 ## 2.12 Tests
 
@@ -736,3 +750,6 @@ given. `build_env.py` never touches the network. After a refresh:
   size and ranges.
 - **Rules:** road class, oneway, lanes, group and AADT; OSM height fallbacks; Macdonald against critic
   §1.10; a synthetic block for λp/λf; the Overpass endpoint fallback (mocked); geometry helpers.
+
+Run them with `python3 -m unittest discover -s tests/python -p 'test_geometry.py' -v` (§2.11); the whole suite is in
+[10 Runbook](10-runbook.md) §10.5.

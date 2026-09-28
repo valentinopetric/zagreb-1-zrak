@@ -1,5 +1,10 @@
 # 01 · Data sources: measurements, weather and background
 
+This chapter describes every measurement and weather input: what is fetched from ISZZ (ZAGREB-1 and the background
+station ZAGREB-4), Open-Meteo (ECMWF IFS) and CAMS, when and how often, the time conventions (UTC, hour-ending), the
+limits of each service, and what ends up in `data/processed/` and `src/data/measurements.json`. The geometry inputs
+are in [02 Geometry](02-geometry.md); the way the calibration uses these tables is in [07 Calibration](07-calibration.md).
+
 *First draft by the measurement-data owner [meas-data]. Covers `tools/fetch_iszz.py`, `tools/fetch_meteo.py`,
 `tools/build_measurements.py`, `data/processed/*`, `src/data/measurements.json`, `tests/python/test_iszz.py` and
 `.github/workflows/refresh-data.yml`. Everything below was run and checked on 2026-09-27.*
@@ -336,7 +341,9 @@ GET https://api.open-meteo.com/v1/forecast?latitude=45.8005&longitude=15.9742
 ```
 
 It returns the same IFS cell as the archive, with BLH, and CORS `*`. It is 5 days × 24 = 120 instantaneous stamps,
-which give 119 hour-ending values. `python3 tools/fetch_meteo.py --forecast` fetches and converts it, for tests and
+which give 119 hour-ending values. This is the default of `Live.forecast()` (data.js). The page itself asks for
+`past_days=3&forecast_days=4`, so that the 72 h hindcast and the 72 h forecast both have IFS weather for every hour
+(main.js; architecture §6.4). `python3 tools/fetch_meteo.py --forecast` fetches and converts it, for tests and
 docs only. The saved sample is `tests/python/fixtures/meteo_forecast_ifs.json`.
 
 ### 3.6 CAMS background forecast (D9): live in the browser
@@ -347,7 +354,8 @@ GET https://air-quality-api.open-meteo.com/v1/air-quality?latitude=45.8005&longi
 ```
 
 - CAMS European air-quality forecast, 0.1° (about 11 km), available from October 2023, updated every 24 h with 4
-  forecast days.
+  forecast days. The page asks for `forecast_days=4` (the `Live.cams()` default is 3), and the chart says which of the
+  72 forecast hours lie beyond the latest CAMS run ([08 User guide](08-user-guide.md) §3.11).
 - All four variables are **instantaneous** (Open-Meteo docs), so the hour-ending conversion is the mean of t − 1 h and
   t (`--cams` does this).
 - Critic D9: bias-correct with the 14-day ratio to ZAGREB-4 (2025 ratios: NO2 1.77, O3 0.86, PM10 1.20, PM2.5 0.85).
@@ -360,8 +368,8 @@ GET https://air-quality-api.open-meteo.com/v1/air-quality?latitude=45.8005&longi
 | | Build time (tools, weekly Action) | Live (the page, data.js [ui]) |
 |---|---|---|
 | ISZZ | full 2023 → now hourly history of both stations; gravimetric PM10 | raw hourly, last 72 h, both stations (`tipPodatka=0`), serialised at 1.1 s with 429 back-off; EAQI badge |
-| Weather | IFS archive 2023 → now | IFS forecast, past 2 + next 3 days |
-| Background | measured ZAGREB-4 | measured ZAGREB-4 for the past; bias-corrected CAMS for the future |
+| Weather | IFS archive 2023 → now | IFS forecast, past 3 + next 4 days (as the page requests it) |
+| Background | measured ZAGREB-4 | measured ZAGREB-4 for the past; bias-corrected CAMS (past 14 + next 4 days) for the future |
 | Fallback | – | the baked snapshot, labelled as such, with its `meta.generated_utc` |
 
 The weekly Action keeps the snapshot at most about 7 days old. The live layer fills in the rest.
@@ -521,7 +529,7 @@ Python's `decode_int16` for `z1.no2`, `z1.co`, `z1.t`, `ifs.blh` and `z4.o3` (9 
 
 ## 7. Tests and fixtures
 
-`python3 -m unittest discover -s tests/python -p 'test_iszz.py' -v` runs 52 tests in about 3 s, without network:
+`python3 -m unittest discover -s tests/python -p 'test_iszz.py' -v` runs 54 tests in about 3 s, without network:
 
 | Group | What it checks |
 |---|---|
@@ -533,6 +541,7 @@ Python's `decode_int16` for `z1.no2`, `z1.co`, `z1.t`, `ifs.blh` and `z4.o3` (9 
 | `TestEncoding` | Int16 base64 round trip with NaN, None and clipping; little-endian byte order and the −32768 code; scale headroom |
 | `TestStats` | sector boundaries (11.25° → 1, 348.75° → 0); the annual 75 % rule and full-years-only; diurnal day types by local hour-start; monthly means; rose with calms; 24-h exceedances with the 18-hour rule; **real** gravimetric daily stamps; validated-then-raw preference for the reference series; paired increment; `build()` end to end on a two-week fixture |
 | `TestIncremental` | with a fake ISZZ server: first run (validated 2025, raw 2026, never validated 2026); a week later only Jul–Oct 2026 are downloaded; no request within 6 h; **rehydration** from the table gives a byte-identical file with only 3 requests; an unpublished validated year costs one probe and is fetched in full once published; the shrink guard; stale cache siblings removed |
+| `TestPlausibility` | (data review, 2026-09-28) station wind spikes outside the `PLAUSIBLE` limits are dropped and counted in `meta.sources.plausibility`; pollutants and IFS values are never filtered (§10 item 4) |
 
 Fixtures (real responses saved verbatim on 2026-09-27; URLs in `fixtures/iszz_fixtures.json` and in each meteo
 file's `_fixture` block):
@@ -579,6 +588,8 @@ Useful flags of `tools/fetch_iszz.py`:
 `tools/fetch_meteo.py --forecast` and `--cams` fetch one sample of the live endpoints. `--save-fixture PATH` also
 stores the raw response.
 
+The same commands, with the other pipelines, are in [10 Runbook](10-runbook.md) §10.2.
+
 Automatically: `.github/workflows/refresh-data.yml` runs on **Mondays at 04:37 UTC** and on demand (`workflow_dispatch`
 with mode `incremental`, `refresh-validated` or `full`). Each run:
 
@@ -621,13 +632,19 @@ from git: the tools would then re-download on each run (about 25 min) and the pa
    −0.07 and −0.09 mg/m³ in July and August 2026 (June 0.03), with 33–75 % of the hours at exactly 0. Validated CO in
    2025 was 0.09–0.47 mg/m³ by month (integration check, 2026-09-28). The page shows raw CO as published. The
    calibration uses validated 2025 data only, so it is not affected.
-3b. **Station meteorology is range-checked** in `build_measurements.py` (`PLAUSIBLE`: wind 0–40 m/s, direction 0–360°,
-   T −40…50 °C, RH 0–100.5 %). Three raw wind spikes of 57, 127.6 and 219.5 m/s (May–June 2024) are dropped, and
-   the count is in `meta.sources.plausibility`. Pollutants are not filtered.
-4. The **annual threshold** is 75 % (architecture §4.2), looser than the AAQD's 85 %. `coverage_by_year` makes this
+4. **Station meteorology is range-checked** in `build_measurements.py` (`PLAUSIBLE`: wind 0–40 m/s, direction 0–360°,
+   T −40…50 °C, RH 0–100.5 %; data review, 2026-09-28). Three raw wind spikes of 57, 127.6 and 219.5 m/s (May–June
+   2024) are dropped, and the count is in `meta.sources.plausibility`. Pollutants are not filtered.
+5. The **annual threshold** is 75 % (architecture §4.2), looser than the AAQD's 85 %. `coverage_by_year` makes this
    visible. Benzene 2023 (80.4 %) and 2025 (84.9 %) fall into that band.
-5. **Rose sectors** use the IFS cell 3.9 km west of the station. Near-station channelling is not in IFS, and the
+6. **Rose sectors** use the IFS cell 3.9 km west of the station. Near-station channelling is not in IFS, and the
    station vane is unusable for N-sector flows (critic §1.5).
-6. **Day types** follow the calendar; Croatian public holidays count as weekdays.
-7. **Licence** of the ISZZ data (G4, §9).
-8. The request budget in weeks with four non-final months is about 67 requests, slightly above critic §4.9's 60 (§2.7).
+7. **Day types** follow the calendar; Croatian public holidays count as weekdays in the measured statistics. (The
+   model's traffic factor treats them as Sundays, [05 Emissions](05-emissions.md) §4.)
+8. **Licence** of the ISZZ data (G4, §9).
+9. The request budget in weeks with four non-final months is about 67 requests, slightly above critic §4.9's 60 (§2.7).
+
+---
+
+**How to re-run:** §8 above, and [10 Runbook](10-runbook.md) §10.2 with the other pipelines. After a refresh that
+changes 2025, re-run the calibration ([07 Calibration](07-calibration.md) §13).

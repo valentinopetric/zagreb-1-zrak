@@ -1,5 +1,11 @@
 # 04 · Dispersion: the GPU steady advection–diffusion solver
 
+This chapter describes how the page carries the emissions of the four source groups (A Vukovarska, B Miramarska, C
+other roads, D domestic heating) through the mean wind of [03 Wind](03-flow-lbm.md): the equation and why one solve
+serves every wind speed, the finite-volume TVD scheme and its stability fix, the eddy-diffusivity closure per
+stability group (AC, D, EF), the boundary conditions, the plume-age tracer used by the NO₂ chemistry
+([06 Chemistry](06-chemistry.md)), and the verification tests T1–T6 with their measured results.
+
 *First draft by the scalar owner [scalar]. Covers `src/js/scalar.js` and `src/js/tests/scalar.test.js`. All numbers
 below were measured on 2026-09-28 in headless Chromium on SwiftShader (software WebGL2, 24-core Linux machine) with
 the code as it stands; §14 gives the commands to reproduce them.*
@@ -44,7 +50,7 @@ turbParams(cls)    ──┘        (CPU: sources,         (û, K̂)       every
 
 | | What | From / to | Format |
 |---|---|---|---|
-| in | Mean flow | `WindTunnel.flow()` → `{avg, samples, uLattice, mask, T, frame, grid, from}`, or `ScalarSolver.flowFromField(windField)` | `avg`: RGBA32F atlas, xyz = Σ lattice velocity over `samples` (porous cells already divided by max(1 − 1.2 m, 0.1) as in the LBM `acc` pass); `mask`: R8 atlas (255 solid, 1–249 porous, 0 fluid) |
+| in | Mean flow ([03 Wind](03-flow-lbm.md) §1.1, §2.2 for the atlas and §5.1 for the sampling) | `WindTunnel.flow()` → `{avg, samples, uLattice, mask, T, frame, grid, from}`, or `ScalarSolver.flowFromField(windField)` | `avg`: RGBA32F atlas, xyz = Σ lattice velocity over `samples` (porous cells already divided by max(1 − 1.2 m, 0.1) as in the LBM `acc` pass); `mask`: R8 atlas (255 solid, 1–249 porous, 0 fluid) |
 | in | Source weights σ_k V per cell | `rasterizeSources(geo, frame, T)` (voxel.js) | `Float32Array(W·H·4)`, atlas layout; road length [m] × AADT/10 000 (A–C), heating area [m²] × weight (D) |
 | in | Turbulence of the stability group | `turbParams(cls, morph)` (meteo.js) | `{cls, L, ustar_hat, h_eff, z0, d, Hbar, Sct, lambda, kmin, kappa}` |
 | in | Tunnel frame | `tunnelFrame()` (voxel.js) | `{from, ex, ey, origin}` |
@@ -102,9 +108,10 @@ $$U_{10}\left[\nabla\cdot(\hat{\mathbf u}\,C)-\nabla\cdot(\hat K\,\nabla C)\righ
 - Check: q [g m⁻¹ s⁻¹] · Γ [m⁻¹] / U [m s⁻¹] = g m⁻³ for A–C, and q [g m⁻² s⁻¹] · 1 / U = g m⁻³ for D.
 
 **The low-wind floor.** Turbulence that does not scale with the wind (vehicle-induced turbulence, meandering, heat
-island) is lumped into U0. U10 is replaced by U_eff = √(U10² + U0²), the OSPM form, with U0 = 1.4 m/s fitted
-against IFS winds (critic §1.1). β is the calibrated emission multiplier (chapter 07). The increment the app uses is
-therefore (architecture §5.3):
+island) is lumped into U0. U10 is replaced by U_eff = √(U10² + U0²), the OSPM form. U0 and the emission multiplier β
+are fitted in the calibration ([07 Calibration](07-calibration.md) §9; the prior U0 = 1.4 m/s comes from the critic's
+refit with IFS winds, critic §1.1). The emission strengths q_k are those of [05 Emissions](05-emissions.md) §3. The
+increment the app uses is therefore (architecture §5.3):
 
 $$\boxed{\;\Delta C_k\,[\mu{\rm g\,m^{-3}}]=10^6\,\beta\,q_k\,\frac{\Gamma_k}{U_{\rm eff}},\qquad U_{\rm eff}=\sqrt{U_{10}^2+U_0^2}\;}$$
 
@@ -351,7 +358,8 @@ Every 50 sweeps the residual pass, the reduction and the probes are read back as
 
 1. **Probes**: the largest change over the last 100 sweeps of Γ and A at 32 probe cells, each relative to the probe's
    value but never to less than 10⁻³ of the channel's largest probe. It must be < 10⁻³. The probes are:
-   - the 3×3×2 receptor band;
+   - the 3×3×2 cells around the receptor (18 probes; the reported band of §12 item 4 is the slightly larger
+     centred block);
    - 8 points along the tunnel centreline at the ground and at n_z/8;
    - 6 off-axis ground points.
 2. **Residual**: ‖a_PΓ_P − Σa_fΓ_N − σV − γb^DC‖₁ / ‖σV‖₁ per group; it must be < 10⁻⁴.
@@ -408,7 +416,7 @@ Unless stated otherwise, the synthetic grids use Δx = 5 m, and the "neutral clo
 | **T5** symmetry | 48×24×12, block j = 9…14 centred across, mirror-symmetric flow (û, ŵ symmetric, v̂ antisymmetric), symmetric sources in all groups, neutral closure, lid at 40 m | symmetric to 10⁻⁴ | Γ ≤ 7.7·10⁻⁷, A ≤ 1.2·10⁻⁶; 2050 sweeps | ✔ |
 | **T6** linearity | T5 grid, RGBA = (σ1, σ2, σ1+σ2, 2σ1) | 2σ → 2Γ to 10⁻⁵; superposition | 2σ → 2Γ: **0 (bit-exact)**, TVD and upwind; Γ(σ1+σ2) − Γ(σ1) − Γ(σ2): upwind 2.5·10⁻⁷, **TVD 0.43 %** of max (A 0.18 %) | ✔ |
 | **T4a** canyon (prescribed vortex) | 48×4×16, W/H = 1, H = 30 m, vortex ψ = −A sin πξ sin πζ, 0.3 û at the roof, floor-centre line source | leeward / windward > 1 | **2.41** (c⁺ = 11.3 leeward, 4.7 windward); 1350 sweeps | ✔ |
-| ScalarField API | T1 result | band contains the value; sample = slice at cell centres | receptor Γ = 0.0266 m⁻¹, band [0.0256, 0.0270]; A/Γ = 220.8 m at 217.5 m downwind | ✔ |
+| ScalarField API | T1 result | band contains the value; sample = slice at cell centres; since the physics review the band is the centred block of §12 item 4 (brute-force check) | receptor Γ = 0.0266 m⁻¹, band [0.0256, 0.0270] (measured with the first, 3×3×2 band); A/Γ = 220.8 m at 217.5 m downwind | ✔ |
 | Seed | T1 on 10 m, prolongated to 5 m | same fixed point | start = prolongated field (< 10⁻⁶); result equal to 1.3·10⁻⁷; see §10 for sweeps | ✔ |
 | **T3** grid (LBM) | 320×160×120 m box, 30×40×20 m block, road 100 m upwind; 10 m vs 5 m | Richardson estimate reported | Γ₁₀ = 0.0342, Γ₅ = 0.0263 m⁻¹; Richardson (p = 2) 0.0237; **GCI 12.5 %**; mass 1.021 / 1.010 (§9.1) | ✔ (slow) |
 | **T4** canyon (LBM) | 320×80×120 m, two 30 m slabs, W/H = 1, perpendicular wind, lateral periodic flow | leeward / windward > 1 | **1.33** (c⁺ 47.0 / 35.4); mass 1.014 (§9.1) | ✔ (slow) |
@@ -539,7 +547,9 @@ The diagnostics cost one sweep-like pass plus five tiny reductions every 50 swee
 3. **Superposition with TVD is approximate** (≈ 0.4 % in T6), because the limiter is nonlinear. Exact superposition
    would need a linear (non-TVD) second-order scheme, which is not bounded.
 4. **Resolution.** Streets of 20–60 m span 4–12 cells at 5 m, and the receptor at 4 m lies between the first two
-   cell centres. The 3×3×2 band quantifies that uncertainty. At 10 m (software) the canyon at the station is barely
+   cell centres. The representativeness band quantifies that uncertainty: the min–max of Γ over every fluid cell
+   within 1.5 cells of the inlet in the two layers around 4 m, a 4×4×2 block at the ZAGREB-1 inlet, which sits on a
+   cell face (physics review 2026-09-28; architecture §4.4). At 10 m (software) the canyon at the station is barely
    resolved.
 5. **The lid is a hard no-flux face.** Material carried toward it by ŵ is redirected by the advective form, not
    accumulated.
@@ -573,7 +583,9 @@ python3 tests/browser/run_selftest.py --only "scalar T1:"
 ```
 
 The runner prints each test's measured numbers (the `info` JSON), and `dist/selftest.json` keeps them. On a machine
-without system libraries for Chromium, set `Z1_BROWSER_LIBS` (see `tests/browser/harness.py`).
+without system libraries for Chromium, set `Z1_BROWSER_LIBS` (see `tests/browser/harness.py`). `scalar.test.js` holds
+14 tests, of which T3 and T4 are slow; the whole in-page suite and its options are in [10 Runbook](10-runbook.md)
+§10.5.
 
 ---
 
